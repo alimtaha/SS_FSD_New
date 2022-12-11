@@ -1,0 +1,48 @@
+import os
+import numpy as np
+import shutil
+
+filenames = os.listdir("./SNE-RoadSeg/datasets/kitti/training/image_2")
+filenames.sort()
+
+no_of_files = (len(filenames))
+indices = np.random.choice(no_of_files, 30, replace = False)
+print(indices)
+print()
+
+for a in indices:              
+
+    image_filename = filenames[a] #depth and image have the same name
+    calib_filename = image_filename.split(".")[0] + ".txt" #calib file has the same name but ends in txt
+    gt_filename = image_filename.split("_")
+    gt_filename = gt_filename[0] + ("_road_") + (gt_filename[1]) #gt_filename - split name by underscore then concatenate with road
+    
+    print(filenames[a])
+
+    image2_src_path = "./SNE-RoadSeg/datasets/kitti/training/image_2" + "/" + image_filename
+    image2_dst_path = "./SNE-RoadSeg/datasets/kitti/validation/image_2" + "/" + image_filename
+
+    gt2_src_path = "./SNE-RoadSeg/datasets/kitti/training/gt_image_2" + "/" + gt_filename
+    gt2_dst_path = "./SNE-RoadSeg/datasets/kitti/validation/gt_image_2" + "/" + gt_filename
+
+    depth_src_path = "./SNE-RoadSeg/datasets/kitti/training/depth_u16" + "/" + image_filename
+    depth_dst_path = "./SNE-RoadSeg/datasets/kitti/validation/depth_u16" + "/" + image_filename
+
+    calib_src_path = "./SNE-RoadSeg/datasets/kitti/training/calib" + "/" + calib_filename
+    calib_dst_path = "./SNE-RoadSeg/datasets/kitti/validation/calib" + "/" + calib_filename
+
+    shutil.move(image2_src_path,image2_dst_path)
+    shutil.move(gt2_src_path,gt2_dst_path)
+    shutil.move(depth_src_path,depth_dst_path)
+    shutil.move(calib_src_path,calib_dst_path)
+
+
+
+
+
+    
+    
+    
+    
+
+

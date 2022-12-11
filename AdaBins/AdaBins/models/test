@@ -1,0 +1,95 @@
+import os
+import random
+
+
+
+import numpy as np
+import torch
+from PIL import Image
+import matplotlib.pyplot as plt
+#from torch.utils.data import Dataset, DataLoader
+#from torchvision import transforms
+
+'''
+xs = torch.linspace(-5, 5, steps=11)
+ys = torch.linspace(-5, 4, steps=10)
+x, y = torch.meshgrid(xs, ys, indexing='xy')
+print(x)
+print(y)
+'''
+
+sample_path = '/Users/alitaha/Downloads/video_sequence (cityscapes dvps depth annotations)/train/000291_000003_frankfurt_000001_032018_depth.png'
+sample_path2 = '/Users/alitaha/Downloads/video_sequence (cityscapes dvps depth annotations)/train/000023_000000_munster_000012_000004_depth.png'
+sample_path3 = '/Users/alitaha/Downloads/cityscapes-vps-dataset-1.0/train/cls/0339_2029_munster_000012_000004_final_mask.png'
+sample_path4 = '/Users/alitaha/Desktop/Python/AdaBins/dataset/kitti/raw/2011_09_26/2011_09_26_drive_0002_sync/image_02/data/0000000006.png'
+sample_path5 = '/Users/alitaha/Desktop/Python/AdaBins/dataset/kitti/gts/2011_09_26_drive_0002_sync/proj_depth/groundtruth/image_02/0000000006.png'
+sample_path6 = '/Users/alitaha/Desktop/Python/AdaBins/AdaBins/predictions_kitti (old)/2011_09_26_drive_0002_sync_0000000006.png'
+image = Image.open(sample_path)
+image = np.asarray(image, dtype=np.float32)/256.0
+fig = plt.figure(figsize=(12, 9))
+fig.add_subplot(3, 2, 1)
+plt.imshow(image, cmap='plasma')
+plt.colorbar()
+image3 = Image.open(sample_path3)
+fig.add_subplot(3, 2, 3)
+plt.imshow(image3)
+plt.colorbar()
+image2 = Image.open(sample_path2)
+image2 = np.asarray(image2, dtype=np.float32)/256.0
+fig.add_subplot(3, 2, 5)
+plt.imshow(image2, cmap='plasma')
+plt.colorbar()
+image4 = Image.open(sample_path4)
+fig.add_subplot(3, 2, 2)
+plt.imshow(image4)
+plt.colorbar()
+image5 = Image.open(sample_path5)
+image5 = np.asarray(image5, dtype=np.float32)/256.0
+fig.add_subplot(3, 2, 4)
+plt.imshow(image5, cmap='plasma')
+plt.colorbar()
+image6 = Image.open(sample_path6)
+image6 = np.asarray(image6, dtype=np.float32)/256.0
+fig.add_subplot(3, 2, 6)
+plt.imshow(image6, cmap='plasma')
+plt.colorbar()
+plt.show()
+
+# n = torch.Tensor([[[2,2,2],[2,2,2]],[[2,2,2],[2,2,2]]])
+# m = torch.Tensor([[2,2,2],[2,2,2]])
+# print(n)
+# print(n.shape)
+# print(m)
+# print(m.shape)
+# torch.unsqueeze(m,0)
+# print(m.shape)c
+# print(m+n)
+
+'''
+sample_path = '2011_09_26/2011_09_26_drive_0057_sync/image_02/data/0000000116.png 2011_09_26_drive_0057_sync/proj_depth/groundtruth/image_02/0000000116.png 721.5377'
+
+def remove_leading_slash(s):
+    if s[0] == '/' or s[0] == '\\':
+        return s[1:]
+    return s
+
+image = Image.open(os.path.join('./dataset/kitti/gts/', remove_leading_slash(sample_path.split()[1])))
+print(str(os.path.join('./dataset/kitti/gts/', remove_leading_slash(sample_path.split()[1]))))
+
+depth_gt = np.asarray(image, dtype=np.float32) 
+#print(depth_gt.shape)      #converting depth image to array
+
+#print(np.amax(depth_gt, axis=1))
+#depth_gt = depth_gt / 256.0
+#print(np.amax(depth_gt, axis=1))
+#depth_gt = np.expand_dims(image, axis=2) 
+np.savetxt("foo.csv", depth_gt, delimiter=",")
+#print(depth_gt.shape)      #converting depth image to array
+
+#depth_gt = depth_gt / 256.0
+
+
+
+# n.unsqueeze(2)
+# print(n)
+# print(n.shape)'''

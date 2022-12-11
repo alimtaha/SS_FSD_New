@@ -1,0 +1,4 @@
+The number of parameters for both models is the same (NYU_depth) and kitti (since model size is the same-ish)
+The sequence length of the transformer isn't defined (the transformer architecture is built for text for varying sequences of length so unlike Linear NN and CNNs, you don't specify the size of the input sequence, only the length - only the size of the patch/token)
+The model can therefore handle variable input size without being reconfigured (patch size may need to be changed however to ensure sequence length isn't too long or too short)
+Encoder (44m params) and Decoder (28m) too big - need to experiment with other smaller encode and decoders as model will struggle

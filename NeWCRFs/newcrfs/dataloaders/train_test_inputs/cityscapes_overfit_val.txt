@@ -1,0 +1,10 @@
+leftImg8bit/val/frankfurt/frankfurt_000000_002196.jpg val/frankfurt/frankfurt_000000_002196.png val/frankfurt/frankfurt_000000_002196_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_002963.jpg val/frankfurt/frankfurt_000000_002963.png val/frankfurt/frankfurt_000000_002963_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_003025.jpg val/frankfurt/frankfurt_000000_003025.png val/frankfurt/frankfurt_000000_003025_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_003357.jpg val/frankfurt/frankfurt_000000_003357.png val/frankfurt/frankfurt_000000_003357_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_003920.jpg val/frankfurt/frankfurt_000000_003920.png val/frankfurt/frankfurt_000000_003920_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_004617.jpg val/frankfurt/frankfurt_000000_004617.png val/frankfurt/frankfurt_000000_004617_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_005543.jpg val/frankfurt/frankfurt_000000_005543.png val/frankfurt/frankfurt_000000_005543_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_005898.jpg val/frankfurt/frankfurt_000000_005898.png val/frankfurt/frankfurt_000000_005898_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_006589.jpg val/frankfurt/frankfurt_000000_006589.png val/frankfurt/frankfurt_000000_006589_camera.json
+leftImg8bit/val/frankfurt/frankfurt_000000_007365.jpg val/frankfurt/frankfurt_000000_007365.png val/frankfurt/frankfurt_000000_007365_camera.json

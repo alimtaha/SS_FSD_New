@@ -1,0 +1,32 @@
+#ignore wandb logs
+*.json
+/CPS/TorchSemiSeg/exp.city/city8.res50v3+.CPS+CutMix/wandb/
+
+#ignore tensorboard logs
+/CPS/TorchSemiSeg/exp.city/city8.res50v3+.CPS+CutMix/log/tb/
+/GLPDepth/logs/
+/NewCRFs/models/newcrfs_cityscapes/summaries/
+
+#ignore pycache
+*.pyc
+
+#ignore images
+*.png
+
+#ignore images
+*.pt
+*.pth
+
+#ignore apex
+/CPS/TorchSemiSeg/furnace/apex/
+
+#ignore wandb
+/AdaBins/AdaBins/wandb/
+
+#ignore parameter checkpoints (note the pretrained weights are uploaded still via the pretrained folder)
+/AdaBins/AdaBins/checkpoints/
+
+#PyTorch build files
+*.so
+
+

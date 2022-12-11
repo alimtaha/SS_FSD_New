@@ -1,0 +1,93 @@
+dataset: # Required.
+  type: cityscapes_semi_depth
+  train:
+    data_root: /home/extraspace/Datasets/Datasets/cityscapes/city/
+    data_list: /home/extraspace/Datasets/Datasets/cityscapes/city/config_new/subset_train/train_aug_labeled_1-8.txt
+    flip: True
+    GaussianBlur: False   #Should experiment with this as true - currently false since CPS doesn't use it
+    #rand_resize: [0.5, 2.0] #resize will be turned off for depth
+    #rand_rotation: [-10.0, 10.0]
+    #cutmix:   performed only on supervised, if this is uncommented will be performed on all
+    #  n_holes: 3
+    #  prop_range: (0.25, 0.5)
+    crop:
+      type: rand
+      size: [600, 600] # crop image with HxW size
+  val:
+    data_root: /home/extraspace/Datasets/Datasets/cityscapes/city/
+    data_list: /home/extraspace/Datasets/Datasets/cityscapes/city/config_new/val.txt
+    crop:
+      type: center
+      size: [1024, 2048] # crop image with HxW size
+  batch_size: 2
+  n_sup: 372
+  noise_std: 0.1
+  workers: 2
+  mean: [123.675, 116.28, 103.53]
+  std: [58.395, 57.12, 57.375]
+  dmean: []
+  dstd: []
+  ignore_label: 100   #since padding/background will be changed to 100 as with SemiSeg CPS
+
+trainer: # Required.
+  epochs: 35
+  eval_on: True
+  sup_only_epoch: 0   #should experiment with warm up epoch as well
+  optimizer:
+    type: SGD
+    kwargs:
+      lr: 0.002  # 1 GPU
+      momentum: 0.9
+      weight_decay: 0.0001
+  lr_scheduler:
+    mode: poly
+    kwargs:
+      power: 0.9
+  unsupervised:
+    TTA: False
+    drop_percent: 80 #this is 1 minus alpha_0 (initial)
+    apply_aug: cutmix
+  contrastive:
+    negative_high_entropy: True
+    low_rank: 1     #changed to 1 from 3 since only two classes, therefore if using for more classes this should be increaed to 3 (paper standard)
+    high_rank: 20
+    current_class_threshold: 0.3
+    current_class_negative_threshold: 1
+    unsupervised_entropy_ignore: 80
+    low_entropy_threshold: 20
+    num_negatives: 50
+    num_queries: 256
+    temperature: 0.5
+
+
+saver:
+  auto_resume: False #Default was true
+  snapshot_dir: "/home/extraspace/Runs/U2PL/Semi/1-8/depth_concat/"
+  log_dir: "/home/extraspace/Logs/U2PL/Semi/1-8/depth_concat/"
+  pretrain: ''
+
+criterion:
+  type: ohem
+  kwargs:
+    thresh: 0.7
+    min_kept: 5000
+
+net: # Required.
+  num_classes: 2
+  sync_bn: False
+  ema_decay: 0.99
+  #aux_loss:
+  #  aux_plane: 1024
+  #  loss_weight: 0.4
+  encoder:
+    type: u2pl.models.resnet.resnet50     #Model changed to Resnet 50
+    kwargs:
+      multi_grid: False
+      zero_init_residual: True
+      fpn: True
+      replace_stride_with_dilation: [False, False, False]  #layer0...1 is fixed, layer2...4
+  decoder:
+    type: u2pl.models.decoder.dec_deeplabv3_plus_depth
+    kwargs:
+      inner_planes: 256
+      dilations: [12, 18, 24]

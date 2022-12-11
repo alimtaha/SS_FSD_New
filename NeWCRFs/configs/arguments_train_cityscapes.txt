@@ -1,0 +1,38 @@
+--mode train
+--model_name newcrfs_cityscapes
+--encoder large07
+--pretrain /home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/NeWCRFs/model_zoo/swin_large_patch4_window7_224_22k.pth
+--dataset cityscapes
+--data_path /vol/biomedic2/aa16914/shared/amir_ali/datasets/images/images
+--gt_path /vol/biomedic2/aa16914/shared/amir_ali/datasets/depth/depth256
+--filenames_file data_splits/cityscapes_train_extra_edited.txt
+--disparity_path /vol/biomedic2/aa16914/shared/amir_ali/datasets/depth/disparity
+--camera_path /vol/biomedic2/aa16914/shared/amir_ali/datasets/camera
+--batch_size 2
+--num_epochs 10
+--learning_rate 2e-5
+--weight_decay 1e-2
+--adam_eps 1e-3
+--num_threads 8
+--input_height 704
+--input_width 352
+--max_depth 256
+--min_depth_train 0.001
+--do_random_rotate
+--degree 1.0
+--log_directory /vol/biomedic2/aa16914/shared/amir_ali/logs/newcrfs
+--model_save
+--save_eval
+
+--multiprocessing_distributed False
+--log_freq 100
+--do_online_eval
+--eval_freq 9998
+--data_path_eval /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainvaltest_(blurred)/
+--gt_path_eval /home/extraspace/Datasets/Datasets/cityscapes/depth/multi_new_depth_inf/
+--filenames_file_eval data_splits/cityscapes_val_edited.txt
+--min_depth_eval 1e-3
+--max_depth_eval 256
+--garg_crop
+--retrain
+--checkpoint_path /home/extraspace/Logs/Final_Results/MDE/NewCRFs/0805_0117NewCRFs30Epochs_1e-05LR_704x352crop_80.0max_depthFalse_Log(Manual)FalseDisparityFalse_CPU/model-249950-best_rms_2.77120

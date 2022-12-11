@@ -1,0 +1,19 @@
+--dataset cityscapes
+--data_path ./datasets/
+--max_depth 256.0
+--max_depth_eval 256.0
+--save_model
+--batch_size 5
+--epochs 40
+--save_result
+--ckpt_dir None
+--crop_h 1024
+--crop_w 352
+--workers 2
+--gpu_or_cpu cpu
+--save_result
+--val_freq 1
+--save_freq 10
+--disparity
+--lr 1e-3
+--logarithmic

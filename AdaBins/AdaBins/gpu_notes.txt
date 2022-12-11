@@ -1,0 +1,8 @@
+1 - .to(device) is how you send to GPU
+torch.cuda.is_available() returns True is cuda and GPUs is_available 
+.is_cuda() returns True if the tensor is generated on the GPU, otherwise if generated on the CPU returns False
+.to() is used for both tensors (data) as well as models to send them to the GPU
+'device' used above in to(device) will hold a string that can be specified, could either be 'cpu', 'cuda' and 'cuda:0'/'cuda:x' to specify which worker/GPU, therefore 'x' here is the device index and is only useful if you have multiple GPUs
+If you have multiple GPUs and you use .to('cuda'), it should default to the 0th GPU, so this would be the same as if you would have written .to('cuda:0')
+to get the device name, use torch.cuda.get_device_name(x) where x is the device count
+torch.cuda.current_device() shows the current device

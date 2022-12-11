@@ -1,0 +1,17 @@
+--data_path /home/extraspace/Datasets/Datasets/cityscapes/city/images/val
+--gt_path /media/taha_a/T7/Datasets/cityscapes/DVPS_Depth/train
+--filenames_file ./val_files_semiseg
+
+--input_height 1024
+--input_width 2048
+--min_depth 1e-3
+--max_depth 80
+
+--data_path_eval /home/extraspace/Datasets/Datasets/cityscapes/city/images/val
+--gt_path_eval /media/taha_a/T7/Datasets/cityscapes/DVPS_Depth/train
+--filenames_file_eval ./val_files_semiseg
+--min_depth_eval 1e-3
+--max_depth_eval 80
+--dataset cityscapes
+--checkpoint_path ./pretrained/AdaBins_cityscapes.pt
+--save_dir predictions_cityscapes

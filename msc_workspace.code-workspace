@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "CPS"
+		},
+		{
+			"path": "AdaBins"
+		},
+		{
+			"path": "SNERoadSeg"
+		},
+		{
+			"path": "U2PL"
+		},
+		{
+			"path": "MDT"
+		},
+		{
+			"path": "GLPDepth"
+		},
+		{
+			"path": "improving_segmentation_with_selfsupervised_depth"
+		},
+		{
+			"path": "NeWCRFs"
+		},
+		{
+			"path": "PixelFormer"
+		}
+	]
+}

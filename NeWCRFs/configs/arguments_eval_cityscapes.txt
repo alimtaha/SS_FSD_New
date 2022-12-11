@@ -1,0 +1,19 @@
+--model_name newcrfs_cityscapes
+--encoder base07
+--dataset cityscapes
+--input_height 1024
+--input_width 2048
+--max_depth 256
+
+--data_path /home/extraspace/Datasets/cityscapes/Depth_Training/leftImg8bit
+--filenames_file data_splits/cityscapes_val_edited.txt
+
+--data_path_eval /home/extraspace/Datasets/cityscapes/Depth_Training/leftImg8bit
+--gt_path_eval /home/extraspace/Datasets/cityscapes/depth/multi_new_depth_inf
+--filenames_file_eval data_splits/cityscapes_val_edited.txt
+--min_depth_eval 1e-3
+--max_depth_eval 256
+--garg_crop
+--save_viz
+
+--checkpoint_path models/newcrfs_cityscapes/model-4500-best_d1_0.89870.ckpt

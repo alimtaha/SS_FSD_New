@@ -1,0 +1,33 @@
+--mode train
+--model_name newcrfs_cityscapes
+--encoder base07
+--pretrain /home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/NeWCRFs/model_zoo/swin_base_patch4_window7_224_22k.pth
+--dataset cityscapes
+--data_path /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainextra(blurred)/
+--gt_path /home/extraspace/Datasets/Datasets/cityscapes/depth/multi_new_depth_inf/
+--filenames_file /home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/NeWCRFs/newcrfs/dataloaders/train_test_inputs/cityscapes_overfit_train.txt
+--disparity_path /home/extraspace/Datasets/Datasets/cityscapes/disparity/
+--camera_path /home/extraspace/Datasets/Datasets/cityscapes/camera/
+--batch_size 2
+--num_epochs 50
+--learning_rate 2e-5
+--weight_decay 1e-2
+--adam_eps 1e-3
+--num_threads 1
+--input_height 704
+--input_width 352
+--max_depth 80
+--do_random_rotate
+--degree 1.0
+--log_directory ./models/
+--save_eval
+
+--log_freq 5
+--do_online_eval
+--eval_freq 28
+--data_path_eval /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainvaltest_(blurred)/
+--gt_path_eval /home/extraspace/Datasets/Datasets/cityscapes/depth/multi_new_depth_inf/
+--filenames_file_eval /home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/NeWCRFs/newcrfs/dataloaders/train_test_inputs/cityscapes_overfit_val.txt
+--min_depth_eval 0.001
+--max_depth_eval 80
+--garg_crop

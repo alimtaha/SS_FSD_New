@@ -1,0 +1,13 @@
+--model_name newcrfs_cityscapes
+--encoder large07
+--dataset cityscapes
+--input_height 1024
+--input_width 2048
+--max_depth 80
+
+--data_path /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainvaltest_(blurred)/
+--filenames_file data_splits/cityscapes_val_edited.txt
+
+--save_viz
+
+--checkpoint_path /home/extraspace/Logs/Final_Results/MDE/NewCRFs/0805_0117NewCRFs30Epochs_1e-05LR_704x352crop_80.0max_depthFalse_Log(Manual)FalseDisparityFalse_CPU/model-249950-best_rms_2.77120
