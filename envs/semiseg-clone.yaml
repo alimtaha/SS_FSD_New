@@ -1,0 +1,4 @@
+name: semiseg-clone
+channels:
+  - defaults
+prefix: /home/extraspace/anaconda3/envs/semiseg-clone
