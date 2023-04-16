@@ -5,6 +5,8 @@ import torch.nn.utils as utils
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.multiprocessing as mp
+import torch.profiler
+
 
 import os
 import sys
@@ -16,7 +18,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from utils import post_process_depth, flip_lr, silog_loss, compute_errors, eval_metrics, \
     block_print, enable_print, normalize_result, inv_normalize, convert_arg_line_to_args
@@ -162,6 +164,7 @@ parser.add_argument(
     help='lambda in paper: [0, 1], higher value more focus on minimizing variance of error',
     default=0.85)
 
+
 # Preprocessing
 parser.add_argument(
     '--do_random_rotate',
@@ -227,7 +230,7 @@ parser.add_argument(
     action='store_true')
 parser.add_argument(
     '--save_eval',
-    help='if set, perform online eval in every eval_freq steps',
+    help='if set, save online eval in every eval_freq steps',
     action='store_true')
 parser.add_argument(
     '--data_path_eval',
@@ -285,11 +288,49 @@ if args.dataset == 'kitti' or args.dataset == 'nyu' or args.dataset == 'cityscap
 elif args.dataset == 'kittipred':
     from dataloaders.dataloader_kittipred import NewDataLoader
 
-exp_mode = 'Depth Only'
-date_time = (datetime.now().strftime('%m%d_%H%M'))
-experiment_name = str(date_time) + 'NewCRFs' + str(args.num_epochs) + 'Epochs_' + str(args.learning_rate) + 'LR_' + str(args.input_height) + 'x' + str(
-        args.input_width) + 'crop_' + str(args.max_depth) + 'max_depth'  + str(args.min_depth_train) + 'min_depth' + str(False) + '_Log(Manual)' + str(args.disparity) + 'Disparity'   
 
+exp_mode = 'Depth_Only'
+
+images_to_save = [
+'frankfurt_000000_000294.png',
+'frankfurt_000000_000576.png',
+'frankfurt_000001_004736.png',
+'frankfurt_000001_068063.png',
+'frankfurt_000001_014406.png',
+'lindau_000028_000019.png',
+'lindau_000058_000019.png',
+'lindau_000010_000019.png',
+'lindau_000006_000019.png',
+'lindau_000044_000019.png',
+'munster_000008_000019.png',
+'munster_000013_000019.png',
+'munster_000167_000019.png',
+'munster_000157_000019.png',
+]
+
+args.model_name = (
+
+    str(datetime.now().strftime('%m%d_%H%M')) 
+    +  'maxdepth:' + str(args.max_depth)
+    + '_width:' + str(args.input_width) 
+    + '_height:' + str(args.input_height)
+    + '_lr:' + str(args.learning_rate) 
+    + '_' + str(args.data_path.split('/')[-1])
+)
+
+date_time = (datetime.now().strftime('%m%d_%H%M'))
+experiment_name = str(date_time) + 'PixelFormer__Epochs-' + str(args.num_epochs) + '_LR-' + str(args.learning_rate) + '_Height-' + str(args.input_height) + '_Width-' + str(
+        args.input_width) + '_MaxDepth-' + str(args.max_depth) + '_MinDepth-'  + str(args.min_depth_train) #+ '_Disparity-' + str(args.disparity)
+
+tb_dir = args.log_directory + '/' + args.model_name + '/summaries'
+
+#PyTorch profiler
+prof = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(tb_dir),
+        record_shapes=True,
+        with_stack=True)
+prof.start()
 
 def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
     #eval_measures = torch.zeros(10).cuda(device=gpu)
@@ -303,15 +344,12 @@ def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
         result_metrics[mask] = {}
         for metric in metric_name:
             result_metrics[mask][metric] = 0.0
-    
+
     save_path = os.path.join(tb_dir, f'epoch_{epoch}/')
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    for _, eval_sample_batched in tqdm(
-        enumerate(
-            tqdm(
-            dataloader_eval.data)), desc=f"Epoch: {epoch + 1}/{args.num_epochs}. Loop: Validation"):
+    for _, eval_sample_batched in tqdm(enumerate(tqdm(dataloader_eval.data)), desc=f"Epoch: {epoch + 1}/{args.num_epochs}. Loop: Validation"):
         with torch.no_grad():
             image = torch.autograd.Variable(
                 eval_sample_batched['image'].cuda(
@@ -345,7 +383,7 @@ def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
         pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
         pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
 
-        if args.save_eval:
+        if args.save_eval and (eval_sample_batched['filename'][0] in images_to_save) :
             save_path_file = os.path.join(save_path, eval_sample_batched['filename'][0])
             if args.dataset == 'kitti' or args.dataset == 'cityscapes':
                 pred_d_numpy = pred_depth * 256.0
@@ -356,7 +394,6 @@ def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
         valid_mask = np.logical_and(
             gt_depth > args.min_depth_eval,
             gt_depth < args.max_depth_eval)
-
         if args.garg_crop or args.eigen_crop:
             gt_height, gt_width = gt_depth.shape
             eval_mask = np.zeros(valid_mask.shape)
@@ -400,7 +437,7 @@ def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
     #        op=dist.ReduceOp.SUM,
     #        group=group)
 
-    if not args.distributed or rank == 0:
+    if not args.distributed or args.rank == 0:
         for masks, mask_dict in result_metrics.items():
                 print(f"{masks} - Validated: \n {mask_dict}\n\n")
         #eval_measures_cpu = eval_measures.cpu()
@@ -417,12 +454,12 @@ def online_eval(model, dataloader_eval, gpu, ngpus, epoch, post_process=False):
     
     return result_metrics
 
-    return None
+    #return None
 
 
-def main_worker(rank, ngpus_per_node, args):
-    
-    args.gpu = None:
+def main_worker(gpu, ngpus_per_node, args):
+    args.gpu = gpu
+    rank = args.rank
 
     if args.gpu is not None:
         print("== Use GPU: {} for training".format(args.gpu))
@@ -442,10 +479,12 @@ def main_worker(rank, ngpus_per_node, args):
         os.environ['MASTER_ADDR'] = 'localhost'
         os.environ['MASTER_PORT'] = '12355'
 
-        dist.init_process_group("nccl", rank=rank, world_size=world_size)
+        dist.init_process_group("nccl", rank=args.rank, world_size=args.world_size)
 
-        sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, 
+        sampler = DistributedSampler(args.dataset, num_replicas=args.world_size, rank=args.rank, 
                                 shuffle=False, drop_last=False)
+    else:
+        args.rank = 0
 
     # NeWCRFs model
     model = NewCRFDepth(
@@ -470,7 +509,7 @@ def main_worker(rank, ngpus_per_node, args):
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[args.gpu], find_unused_parameters=True)
         else:
-            model.to(rank)
+            model.cuda()
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[rank],output_device=rank,
@@ -481,7 +520,8 @@ def main_worker(rank, ngpus_per_node, args):
         if torch.cuda.device_count() > 1:
             device = 1 if torch.cuda.mem_get_info(0)[0] < 9000000000 else 0
 
-        device = torch.device(f'cuda:{device}')
+        model = torch.nn.DataParallel(model) #this is needed to ensure model loading compatibility with the author's original pretrained model
+        device = torch.device(f'cuda:0')
         #model = torch.nn.DataParallel(model)
     else:
         device='cpu'
@@ -505,7 +545,6 @@ def main_worker(rank, ngpus_per_node, args):
                                  lr=args.learning_rate)
 
     model_just_loaded = False
-
     if args.checkpoint_path != '':
         if os.path.isfile(args.checkpoint_path):
             print("== Loading checkpoint '{}'".format(args.checkpoint_path))
@@ -515,7 +554,7 @@ def main_worker(rank, ngpus_per_node, args):
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.checkpoint_path, map_location=loc)
             model.load_state_dict(checkpoint['model'])
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            #optimizer.load_state_dict(checkpoint['optimizer'])
             if not args.retrain:
                 try:
                     global_step = checkpoint['global_step']
@@ -524,33 +563,32 @@ def main_worker(rank, ngpus_per_node, args):
                     best_eval_measures_lower_better = checkpoint['best_eval_measures_lower_better'].cpu(
                     )
                     best_eval_steps = checkpoint['best_eval_steps']
+                    print("== Loaded checkpoint '{}' (global_step {})".format(
+                    args.checkpoint_path, checkpoint['global_step']))
+                    del checkpoint
                 except KeyError:
                     print("Could not load values for online evaluation")
-
-            print("== Loaded checkpoint '{}' (global_step {})".format(
-                args.checkpoint_path, checkpoint['global_step']))
         else:
             print(
                 "== No checkpoint found at '{}'".format(
                     args.checkpoint_path))
         model_just_loaded = True
-        del checkpoint
+        
 
     cudnn.benchmark = True
 
-    dataloader = NewDataLoader(args, 'train', world_size=world_size, rank=rank, shuffle=False, drop_last=False)
+    dataloader = NewDataLoader(args, 'train', world_size=args.world_size, rank=rank, shuffle=False, drop_last=False)
     
     if rank == 0:
-        dataloader_eval = NewDataLoader(args, 'online_eval', world_size=world_size, rank=rank, shuffle=True, drop_last=False)
+        dataloader_eval = NewDataLoader(args, 'online_eval', world_size=args.world_size, rank=rank, shuffle=True, drop_last=False)
 
     # ===== Evaluation before training ======
     # model.eval()
     # with torch.no_grad():
     #     eval_measures = online_eval(model, dataloader_eval, gpu, ngpus_per_node, post_process=True)
 
-
     # Logging
-    if rank == 0:
+    if rank == 0 or not args.multiprocessing_distributed:
         
         writer = SummaryWriter(
             tb_dir,
@@ -565,6 +603,17 @@ def main_worker(rank, ngpus_per_node, args):
             #eval_summary_writer = SummaryWriter(
             #    eval_summary_path, flush_secs=30)
     
+    hparams_dict = {
+        'lr': args.learning_rate,
+        'adam_eps': args.adam_eps,
+        'height': args.input_height,
+        'width': args.input_width,
+        'max_depth': args.max_depth,
+        'weight_decay': args.weight_decay,
+        'batch_size': args.batch_size,
+        'dset_type': args.gt_path.split('/')[-2]
+    }
+
     if args.distributed:
         torch.distributed.parallel.barrier()
 
@@ -624,7 +673,7 @@ def main_worker(rank, ngpus_per_node, args):
             mask_max = depth_gt < args.max_depth
             mask = torch.logical_and(mask, mask_max)
 
-            depth_est = model(image*mask.float())       #test computational efficiency if masking done before feeding into network
+            depth_est = model(image)#*mask.float())       #test computational efficiency if masking done before feeding into network
 
             '''
             b, c, h, w = depth_gt.shape
@@ -664,17 +713,12 @@ def main_worker(rank, ngpus_per_node, args):
 
             optimizer.step()
 
-            if rank == 0 and step % 20 == 0:
-                print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(
-                    epoch, step, steps_per_epoch, global_step, current_lr, loss))
-                if np.isnan(loss.cpu().item()):
-                    print('NaN in loss occurred. Aborting training.')
-                    return -1
-
+            prof.step() #PyTorch Profiler Step
+            #if rank == 0 and step % args.log_freq == 0:
+                
             duration += time.time() - before_op_time
             if global_step and global_step % args.log_freq == 0 and not model_just_loaded and rank == 0:
-                var_sum = [var.sum().item()
-                           for var in model.parameters() if var.requires_grad]
+                var_sum = [var.sum().item() for var in model.parameters() if var.requires_grad]
                 var_cnt = len(var_sum)
                 var_sum = np.sum(var_sum)
                 examples_per_sec = args.batch_size / duration * args.log_freq
@@ -686,6 +730,12 @@ def main_worker(rank, ngpus_per_node, args):
                 if rank == 0:
                     print("{}".format(args.model_name))
                 
+                print('[epoch][s/s_per_e/gs]: [{}][{}/{}/{}], lr: {:.12f}, loss: {:.12f}'.format(
+                    epoch, step, steps_per_epoch, global_step, current_lr, loss))
+                if np.isnan(loss.cpu().item()):
+                    print('NaN in loss occurred. Aborting training.')
+                    return -1
+
                 print_string = 'GPU: {} | examples/s: {:4.2f} | loss: {:.5f} | var sum: {:.3f} avg: {:.3f} | time elapsed: {:.2f}h | time left: {:.2f}h | current lr: {:.3E} | initial lr: {:.3E}'
                 
                 print(
@@ -701,7 +751,7 @@ def main_worker(rank, ngpus_per_node, args):
                         current_lr,
                         args.learning_rate))
 
-                if rank == 0:
+                if rank == 0 and global_step % (5*args.log_freq) == 0 :
                     writer.add_scalar('silog_loss', loss, global_step)
                     writer.add_scalar('learning_rate', current_lr, global_step)
                     writer.add_scalar(
@@ -741,29 +791,30 @@ def main_worker(rank, ngpus_per_node, args):
                         #    mask_names[i] + '/' + eval_metrics[i], eval_measures['mask_all'][i], int(global_step))
                         measure = eval_measures['mask_all'][i]
                         is_best = False
-                        if i in ('abs_rel', 'd1', 'silog'):
-                            if i in ('abs_rel', 'sq_rel', 'rms', 'log_rms', 'log10', 'silog') and measure < best_eval_measures_lower_better[i]:
-                                old_best = best_eval_measures_lower_better[i]
-                                best_eval_measures_lower_better[i] = measure
-                                is_best = True
-                            elif i in ('d1', 'd2', 'd3') and measure > best_eval_measures_higher_better[i]:
-                                old_best = best_eval_measures_higher_better[i]
-                                best_eval_measures_higher_better[i] = measure
-                                is_best = True
-                            if is_best:
-                                old_best_step = best_eval_steps[i]
-                                old_best_name = '/model-{}-best_{}_{:.5f}'.format(
-                                    old_best_step, i, old_best)
-                                model_path = args.log_directory + '/' + args.model_name + old_best_name
-                                if os.path.exists(model_path):
-                                    command = 'rm {}'.format(model_path)
-                                    os.system(command)
-                                best_eval_steps[i] = global_step
-                                model_save_name = '/model-{}-best_{}_{:.5f}'.format(
-                                    global_step, i, measure)
-                                print(
-                                    'New best for {}. Saving model: {}'.format(
-                                        i, model_save_name))
+                        #if i in ('abs_rel', 'd1', 'silog'):
+                        if i in ('abs_rel', 'sq_rel', 'rms', 'log_rms', 'log10', 'silog') and measure < best_eval_measures_lower_better[i]:
+                            old_best = best_eval_measures_lower_better[i]
+                            best_eval_measures_lower_better[i] = measure
+                            is_best = True
+                        elif i in ('d1', 'd2', 'd3') and measure > best_eval_measures_higher_better[i]:
+                            old_best = best_eval_measures_higher_better[i]
+                            best_eval_measures_higher_better[i] = measure
+                            is_best = True
+                        if is_best:
+                            old_best_step = best_eval_steps[i]
+                            old_best_name = '/model-{}-best_{}_{:.5f}'.format(
+                                old_best_step, i, old_best)
+                            model_path = args.log_directory + '/' + args.model_name + old_best_name
+                            if os.path.exists(model_path):
+                                command = 'rm {}'.format(model_path)
+                                os.system(command)
+                            best_eval_steps[i] = global_step
+                            model_save_name = '/model-{}-best_{}_{:.5f}'.format(
+                                global_step, i, measure)
+                            print(
+                                'New best for {}. Saving model: {}'.format(
+                                    i, model_save_name))
+                            if i in ('abs_rel', 'd1', 'silog'):
                                 checkpoint = {
                                     'global_step': global_step,
                                     'model': model.state_dict(),
@@ -771,6 +822,10 @@ def main_worker(rank, ngpus_per_node, args):
                                     'best_eval_measures_higher_better': best_eval_measures_higher_better,
                                     'best_eval_measures_lower_better': best_eval_measures_lower_better,
                                     'best_eval_steps': best_eval_steps}
+                                print('model checkpoint saved at: ', args.log_directory +
+                                        '/' +
+                                        args.model_name +
+                                        model_save_name)
                                 if args.model_save:
                                     torch.save(
                                         checkpoint,
@@ -778,25 +833,38 @@ def main_worker(rank, ngpus_per_node, args):
                                         '/' +
                                         args.model_name +
                                         model_save_name)
-                        #eval_summary_writer.flush()
+                            #eval_summary_writer.flush()
                         else:
                             continue
                 model.train()
                 block_print()
                 enable_print()
 
-            if args.distributed:
-                torch.distributed.parallel.barrier()
-            
             model_just_loaded = False
-            global_step += (1 * world_size)
+            global_step += (1 * args.world_size)
 
         epoch += 1
 
+    prof.stop() #End PyTorch Profiler
     #if not args.multiprocessing_distributed or (
     #        args.multiprocessing_distributed and args.rank %
     #        ngpus_per_node == 0):
         #writer.close()
+
+    hparam_metric_dict = { #AT Hyperparam
+    'd1': best_eval_measures_higher_better['d1'],
+    'd2': best_eval_measures_higher_better['d2'],
+    'd3': best_eval_measures_higher_better['d3'],
+    'rms': best_eval_measures_lower_better['rms'],
+    'log_rms':best_eval_measures_lower_better['log_rms'],
+    'abs_rel':best_eval_measures_lower_better['abs_rel'],
+    'sq_rel': best_eval_measures_lower_better['sq_rel'],
+    'silog' :best_eval_measures_lower_better['silog'],
+    'log10': best_eval_measures_lower_better['log10']
+    
+    }
+
+    writer.add_hparams(hparams_dict, hparam_metric_dict)
         #if args.do_online_eval:
             #eval_summary_writer.close()
 
@@ -806,22 +874,23 @@ def main():
         print('train.py is only for training.')
         return -1
 
-    date_time = (datetime.now().strftime('%m%d_%H%M'))
-    subdir = args.log_directory + '/' + date_time + '/' +  args.encoder + '/' + experiment_name  
-    args.log_directory = os.path.join(args.log_directory, subdir)
-    tb_dir = os.path.join(args.log_directory, '/summaries')
+    # date_time = (datetime.now().strftime('%m%d_%H%M'))
+    # #subdir = args.log_directory + '/' + date_time + '/' +  args.encoder + '/' + experiment_name  
+    # args.log_directory = os.path.join(args.log_directory, args.model_name)
+    # #tb_dir = os.path.join(args.log_directory, '/summaries')
+    # tb_dir = args.log_directory + '/' + args.model_name + '/summaries'
     
 
-    command = 'mkdir ' + os.path.join(args.log_directory, args.encoder)
+    command = 'mkdir ' + os.path.join(args.log_directory, args.model_name)
     os.system(command)
 
-    args_out_path = os.path.join(args.log_directory, args.encoder)
+    args_out_path = os.path.join(args.log_directory, args.model_name)
     command = 'cp ' + sys.argv[1] + ' ' + args_out_path
     os.system(command)
 
     save_files = True
     if save_files:
-        aux_out_path = os.path.join(args.log_directory, 'files')
+        aux_out_path = os.path.join(args.log_directory, args.model_name)
         networks_savepath = os.path.join(aux_out_path, 'networks')
         dataloaders_savepath = os.path.join(aux_out_path, 'dataloaders')
         command = 'cp newcrfs/train.py ' + aux_out_path
@@ -839,13 +908,12 @@ def main():
     ngpus_per_node = torch.cuda.device_count()
     
     if ngpus_per_node > 1 and not args.multiprocessing_distributed:
-        main_worker(rank=0, ngpus_per_node, args)
+        main_worker(0, ngpus_per_node, args)
         
     if args.do_online_eval:
         print("You have specified --do_online_eval.")
-        print(
-            "This will evaluate the model every eval_freq {} steps and save best models for individual eval metrics." .format(
-                args.eval_freq))
+        print("This will evaluate the model every eval_freq {} steps and save best models for individual eval metrics."
+            .format(args.eval_freq))
 
     if args.multiprocessing_distributed:
         args.world_size = ngpus_per_node #* args.world_size
@@ -854,7 +922,7 @@ def main():
             nprocs=ngpus_per_node,
             args=(args,))
     else:
-        main_worker(rank=0, ngpus_per_node, args)
+        main_worker(0, ngpus_per_node, args)
 
 
 if __name__ == '__main__':

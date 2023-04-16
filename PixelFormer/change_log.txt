@@ -1,0 +1,11 @@
+Dec 11 2022
+- Config file changed (Height 352 -> 704, width 1120 -> 352, batch size  -> 2, paths, deleted --multiprocessing, --dist_url & --kb_crop)
+- Tensorboard logger changes to PyTorch native logger (torch.utils)
+- Log name directory code changed, config file now saved
+- Picture cropping investigated - changed to 
+- Eval path
+- save_freq added to config file ( every 4 epochs - 79988 iters)
+
+
+Dec 15 2022
+- Added masking during training for max depth values

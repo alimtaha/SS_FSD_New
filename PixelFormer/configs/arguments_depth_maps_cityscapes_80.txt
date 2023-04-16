@@ -1,0 +1,17 @@
+--model_name pixelformer_cityscapes
+--encoder large07
+--dataset cityscapes
+--input_height 1024
+--input_width 2048
+--max_depth 80
+
+--data_path_eval /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainvaltest_blurred/leftImg8bit/
+--gt_path_eval /home/extraspace/Datasets/Datasets/cityscapes/depth/multi_new_depth_inf/
+--semantic_labels_dataset /home/extraspace/Datasets/Datasets/cityscapes/city/segmentation/val/
+--filenames_file_eval data_splits/cityscapes_all_edited.txt
+--log_directory /home/extraspace/Logs/MDE/PixelFormer
+--save_path /home/extraspace/Datasets/Datasets/cityscapes/city/depth_gen/
+--min_depth_eval 1e-3
+--max_depth_eval 80
+
+--checkpoint_path /home/extraspace/Logs/MDE/PixelFormer/0408_1832maxdepth:80.0_width:352_height:1024_lr:1e-05_/model-49980-best_d1_0.94092

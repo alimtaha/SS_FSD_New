@@ -11,8 +11,8 @@ export CPU_DIST_ONLY=False
 export WORLD_SIZE=1
 
 export volna="/home/extraspace/Datasets/Datasets/cityscapes/city/"
-export OUTPUT_PATH="/home/extraspace/Runs/CPS/Full/1-$ratio/"
-export snapshot_dir="/home/extraspace/Runs/CPS/Full/1-$ratio/no_depth/$learning_rate_$epochs"
+export OUTPUT_PATH="/home/extraspace/Runs/CPS/Full/"
+export snapshot_dir="/home/extraspace/Runs/CPS/Full/"
 
 
 python train_sup.py  #-m torch.distributed.launch --nproc_per_node=$NGPUS  #https://pytorch.org/docs/stable/elastic/run.html

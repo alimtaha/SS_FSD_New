@@ -5,17 +5,22 @@
 #ignore tensorboard logs
 /CPS/TorchSemiSeg/exp.city/city8.res50v3+.CPS+CutMix/log/tb/
 /GLPDepth/logs/
-/NewCRFs/models/newcrfs_cityscapes/summaries/
+/NewCRFs/models/
+/NewCRFs/newcrfs/pretrained/
+/PixelFormer/pixelformer/pretrained/
 
 #ignore pycache
 *.pyc
 
 #ignore images
 *.png
+*.jpg
+*.jpeg
 
 #ignore images
 *.pt
 *.pth
+*.ckpt
 
 #ignore apex
 /CPS/TorchSemiSeg/furnace/apex/

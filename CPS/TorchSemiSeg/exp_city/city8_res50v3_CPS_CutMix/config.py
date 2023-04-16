@@ -11,7 +11,7 @@ import time
 import numpy as np
 from easydict import EasyDict as edict
 import argparse
-
+import socket
 
 class bcolors:
     HEADER = '\033[95m'
@@ -29,6 +29,8 @@ C = edict()
 config = C
 cfg = C
 
+C.aws = False if socket.gethostname() in ['wmgubws06.wmgds.wmg.warwick.ac.uk', 'wmgubws05.wmgds.wmg.warwick.ac.uk'] else True
+
 C.seed = 12345
 
 remoteip = os.popen('pwd').read()
@@ -36,7 +38,7 @@ if os.getenv('volna') is not None:
     C.volna = os.environ['volna']
 else:
     # the path to the data dir.
-    C.volna = '/media/taha_a/T7/Datasets/cityscapes/city'
+    C.volna = '/home/extraspace/Datasets/Datasets/cityscapes/city/'
 
 """please config ROOT_dir and user when u first using"""
 C.repo_name = 'TorchSemiSeg'
@@ -51,11 +53,26 @@ C.mode = os.environ['mode']
 #future config to be added to allow all labels
 
 #C.root_dir = C.abs_dir[:C.abs_dir.index(C.repo_name) + len(C.repo_name)]
-C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg'
-C.log_dir = '/home/extraspace/Logs'
-C.tb_dir = C.log_dir  # osp.abspath(osp.join(C.log_dir, "tb"))
-
-C.log_dir_link = osp.join(C.abs_dir, 'log')
+if C.aws is False:
+    C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/SS_FSD_New/CPS/TorchSemiSeg'
+    C.log_dir = '/home/extraspace/Logs/SSL/CPS/'
+    C.tb_dir = C.log_dir  # osp.abspath(osp.join(C.log_dir, "tb"))
+    """Data Dir and Weight Dir"""
+    C.dataset_path = C.volna
+    C.img_root_folder = C.dataset_path
+    C.gt_root_folder = C.dataset_path
+    C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
+    #C.log_dir_link = osp.join(C.abs_dir, 'log')
+else:
+    C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/SS_FSD_New/CPS/TorchSemiSeg'
+    C.log_dir = '/home/extraspace/Logs/SSL/CPS/'
+    C.tb_dir = C.log_dir  # osp.abspath(osp.join(C.log_dir, "tb"))
+    """Data Dir and Weight Dir"""
+    C.dataset_path = C.volna
+    C.img_root_folder = C.dataset_path
+    C.gt_root_folder = C.dataset_path
+    C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
+    #C.log_dir_link = osp.join(C.abs_dir, 'log')
 
 # snapshot dir that stores checkpoints
 if os.getenv('snapshot_dir'):
@@ -65,24 +82,14 @@ else:
 
 exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 C.log_file = C.log_dir + '/log_' + exp_time + '.log'
-C.link_log_file = C.log_file + '/log_last.log'
+#C.link_log_file = C.log_file + '/log_last.log'
 C.val_log_file = C.log_dir + '/val_' + exp_time + '.log'
-C.link_val_log_file = C.log_dir + '/val_last.log'
-
-"""Data Dir and Weight Dir"""
-C.dataset_path = C.volna  # changed so path is the external drive
-C.img_root_folder = C.dataset_path
-C.gt_root_folder = C.dataset_path
-C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
-
+#C.link_val_log_file = C.log_dir + '/val_last.log'
 
 """Path Config"""
-
-
 def add_path(path):
     if path not in sys.path:
         sys.path.insert(0, path)
-
 
 add_path(osp.join(C.root_dir, 'furnace'))
 

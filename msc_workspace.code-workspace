@@ -26,6 +26,9 @@
 		},
 		{
 			"path": "PixelFormer"
+		},
+		{
+			"path": "TB_utils"
 		}
 	]
 }

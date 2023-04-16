@@ -5,9 +5,12 @@ from torchvision import transforms
 
 import numpy as np
 from PIL import Image
-import os
+import os, sys
+from matplotlib import pyplot as plt
 import random
 import json
+sys.path.append('../')
+sys.path.append('../../')
 
 from utils import DistributedSamplerNoEvenlyDivisible
 
@@ -20,17 +23,17 @@ def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
 
-def preprocessing_transforms(mode):
+def preprocessing_transforms(mode, args):
     return transforms.Compose([
-        ToTensor(mode=mode)
+        ToTensor(mode=mode, args=args)
     ])
 
 
 class NewDataLoader(object):
-    def __init__(self, args, mode, world_size=world_size, rank=rank, shuffle=False, drop_last=False):
+    def __init__(self, args, mode, world_size=1, rank=0, shuffle=False, drop_last=False):
         if mode == 'train':
             self.training_samples = DataLoadPreprocess(
-                args, mode, transform=preprocessing_transforms(mode))
+                args, mode, transform=preprocessing_transforms(mode, args))
             if args.distributed:
                 self.train_sampler = torch.utils.data.distributed.DistributedSampler(
                     self.training_samples, num_replicas=world_size, rank=rank, 
@@ -46,7 +49,7 @@ class NewDataLoader(object):
 
         elif mode == 'online_eval':
             self.testing_samples = DataLoadPreprocess(
-                args, mode, transform=preprocessing_transforms(mode))
+                args, mode, transform=preprocessing_transforms(mode, args))
             #if args.distributed:
                 # self.eval_sampler = torch.utils.data.distributed.DistributedSampler(self.testing_samples, shuffle=False)
                 #self.eval_sampler = DistributedSamplerNoEvenlyDivisible(
@@ -61,7 +64,7 @@ class NewDataLoader(object):
 
         elif mode == 'test':
             self.testing_samples = DataLoadPreprocess(
-                args, mode, transform=preprocessing_transforms(mode))
+                args, mode, transform=preprocessing_transforms(mode, args))
             self.data = DataLoader(
                 self.testing_samples,
                 1,
@@ -69,9 +72,7 @@ class NewDataLoader(object):
                 num_workers=1)
 
         else:
-            print(
-                'mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
-
+            print('mode should be one of \'train, test, online_eval\'. Got {}'.format(mode))
 
 class DataLoadPreprocess(Dataset):
     def __init__(self, args, mode, transform=None, is_for_online_eval=False):
@@ -117,7 +118,7 @@ class DataLoadPreprocess(Dataset):
                 camera_path = os.path.join(self.args.camera_path, camera_file)
             else:
                 depth_path = os.path.join(self.args.gt_path, depth_file)
-                
+
             depth_gt = Image.open(depth_path)
 
             if self.args.do_kb_crop is True:
@@ -151,12 +152,11 @@ class DataLoadPreprocess(Dataset):
                     (left_margin, top_margin, left_margin + 2048, top_margin + 1024))
                 image = image.crop(
                     (left_margin, top_margin, left_margin + 2048, top_margin + 1024))
-
+                
             if self.args.do_random_rotate is True:
                 random_angle = (random.random() - 0.5) * 2 * self.args.degree
                 image = self.rotate_image(image, random_angle)
-                depth_gt = self.rotate_image(
-                    depth_gt, random_angle, flag=Image.NEAREST)
+                depth_gt = self.rotate_image(depth_gt, random_angle, flag=Image.NEAREST)
 
             image = np.asarray(image, dtype=np.float32) / 255.0
             depth_gt = np.asarray(depth_gt, dtype=np.float32)
@@ -177,8 +177,8 @@ class DataLoadPreprocess(Dataset):
                     depth_gt = depth_gt / 256.0
 
             if image.shape[0] != self.args.input_height or image.shape[1] != self.args.input_width:
-                image, depth_gt = self.random_crop(
-                    image, depth_gt, self.args.input_height, self.args.input_width)
+                image, depth_gt = self.random_crop(image, depth_gt, self.args.input_height, self.args.input_width)
+
             image, depth_gt = self.train_preprocess(image, depth_gt)
             sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'filename': filename}
 
@@ -189,9 +189,7 @@ class DataLoadPreprocess(Dataset):
                 data_path = self.args.data_path
 
             image_path = os.path.join(data_path, "./" + sample_path.split()[0])
-            image = np.asarray(
-                Image.open(image_path),
-                dtype=np.float32) / 255.0
+            image = np.asarray(Image.open(image_path),dtype=np.float32) / 255.0
 
             filename = image_path.split('/')[-1].replace('.jpg', '.png')
             camera_file = sample_path.split()[2]
@@ -205,7 +203,9 @@ class DataLoadPreprocess(Dataset):
                 else:
                     depth_path = os.path.join(
                     gt_path, "./" + sample_path.split()[1])
-                
+                if self.args.road_mask:
+                    semantic_path = os.path.join(self.args.semantic_labels_dataset, sample_path.split()[1].split('/')[-1].replace('.png', '_gtFine.png'))
+
                 if self.args.dataset == 'kitti':
                     depth_path = os.path.join(
                         gt_path,
@@ -236,6 +236,12 @@ class DataLoadPreprocess(Dataset):
                         else:
                             depth_gt = depth_gt / 256.0
 
+                    if self.args.road_mask:
+                        road_mask = Image.open(semantic_path)
+                        road_mask = np.asarray(road_mask)
+                        road_mask  = np.where(road_mask == 0, 1, 0)
+                        road_mask = np.expand_dims(road_mask, axis=2)
+
             if self.args.do_kb_crop is True:
                 height = image.shape[0]
                 width = image.shape[1]
@@ -248,12 +254,10 @@ class DataLoadPreprocess(Dataset):
                                         352, left_margin:left_margin + 1216, :]
 
             if self.mode == 'online_eval':
-                sample = {
-                    'image': image,
-                    'depth': depth_gt,
-                    'focal': focal,
-                    'has_valid_depth': has_valid_depth,
-                    'filename': filename}
+                if self.args.road_mask:
+                    sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth, 'path': image_path, 'filename': filename, 'road_mask': road_mask}
+                else:
+                    sample = {'image': image, 'depth': depth_gt, 'focal': focal, 'has_valid_depth': has_valid_depth, 'path': image_path, 'filename': filename}
             else:
                 sample = {'image': image, 'focal': focal, 'filename': filename}
 
@@ -317,13 +321,10 @@ class DataLoadPreprocess(Dataset):
 
 
 class ToTensor(object):
-    def __init__(self, mode):
+    def __init__(self, mode, args):
         self.mode = mode
-        self.normalize = transforms.Normalize(
-            mean=[
-                0.485, 0.456, 0.406], 
-            std=[
-                0.229, 0.224, 0.225])
+        self.args = args
+        self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     def __call__(self, sample):
         image, focal, filename = sample['image'], sample['focal'], sample['filename']
@@ -331,20 +332,22 @@ class ToTensor(object):
         image = self.normalize(image)
 
         if self.mode == 'test':
-            return {'image': image, 'focal': focal, 'filemame': filename}
+            return {'image': image, 'focal': focal, 'filename': filename}
 
         depth = sample['depth']
+        if self.args.road_mask:
+            road_mask = sample['road_mask']
         if self.mode == 'train':
             depth = self.to_tensor(depth)
-            return {'image': image, 'depth': depth, 'focal': focal, 'filemame': filename}
+            if self.args.road_mask:
+                road_mask = self.to_tensor(road_mask)
+            return {'image': image, 'depth': depth, 'focal': focal, 'filename': filename}
         else:
             has_valid_depth = sample['has_valid_depth']
-            return {
-                'image': image,
-                'depth': depth,
-                'focal': focal,
-                'has_valid_depth': has_valid_depth,
-                'filename': filename}
+            if self.args.road_mask:
+                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'path': sample['path'], 'filename': filename, 'road_mask': road_mask}
+            else:
+                return {'image': image, 'depth': depth, 'focal': focal, 'has_valid_depth': has_valid_depth, 'path': sample['path'], 'filename': filename}
 
     def to_tensor(self, pic):
         if not (_is_pil_image(pic) or _is_numpy_image(pic)):
@@ -361,9 +364,7 @@ class ToTensor(object):
         elif pic.mode == 'I;16':
             img = torch.from_numpy(np.array(pic, np.int16, copy=False))
         else:
-            img = torch.ByteTensor(
-                torch.ByteStorage.from_buffer(
-                    pic.tobytes()))
+            img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
         # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
         if pic.mode == 'YCbCr':
             nchannel = 3

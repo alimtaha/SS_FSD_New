@@ -1,0 +1,34 @@
+--mode train
+--model_name pixelformer_cityscapes_hyperparameters_sampled
+--encoder large07
+--pretrain /home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/NeWCRFs/model_zoo/swin_large_patch4_window7_224_22k.pth
+--dataset cityscapes
+--data_path /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainextra_blurred/
+--gt_path /home/extraspace/Datasets/Datasets/cityscapes/depth/H_DATASET/
+--filenames_file data_splits/cityscapes_train_extra_edited.txt
+--sampled_file data_splits/cityscapes_train_extra_sampled.txt
+--batch_size 2
+--num_epochs 5
+--learning_rate H_LR
+--weight_decay 1e-2
+--adam_eps 1e-3
+--num_threads 16
+--input_height H_HEIGHT
+--input_width H_WIDTH
+--max_depth H_MAXDEPTH
+--do_random_rotate
+--degree 1.0
+--log_directory /home/extraspace/Logs/MDE/PixelFormer
+--checkpoint_path pixelformer/pretrained/kitti_pretrained.pth
+--sampled
+
+--save_freq 79988
+--log_freq 100
+--do_online_eval
+--eval_freq 1250
+--data_path_eval /home/extraspace/Datasets/Datasets/cityscapes/leftImg8bit_trainvaltest_blurred/leftImg8bit/
+--gt_path_eval /home/extraspace/Datasets/Datasets/cityscapes/depth/H_DATASET/
+--filenames_file_eval data_splits/cityscapes_val_edited.txt
+--min_depth_eval 1e-3
+--max_depth_eval H_MAXDEPTH
+--garg_crop

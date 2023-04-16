@@ -1,0 +1,7 @@
+
+
+lr 1e-5 2e-5 4e-5
+size narrow wide original
+depth 80 256
+dataset multi 80
+27 experiments
