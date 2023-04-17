@@ -9,6 +9,7 @@ export epochs=35
 export ratio=16
 export WORLD_SIZE=$batch_size
 export CPU_DIST_ONLY='True'
+export debug="False"
 
 export volna="/home/extraspace/Datasets/Datasets/cityscapes/city/"
 export OUTPUT_PATH="/home/extraspace/Runs/CPS/Semi/1-$ratio/"

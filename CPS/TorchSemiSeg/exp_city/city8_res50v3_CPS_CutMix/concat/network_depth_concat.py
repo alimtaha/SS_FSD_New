@@ -4,8 +4,7 @@ from furnace.seg_opr.loss_opr import SigmoidFocalLoss, ProbOhemCrossEntropy2d, b
 from furnace.engine.engine import Engine
 from furnace.engine.lr_policy import WarmUpPolyLR
 from furnace.utils.init_func import init_weight, group_weight
-from dataloader_depth_concat import CityScape
-from dataloader_depth_concat import get_train_loader
+from dataloader_depth_concat import get_train_loader, CityScape
 from furnace.base_model import resnet50
 from collections import OrderedDict
 from functools import partial
@@ -82,7 +81,7 @@ class SingleNetwork(nn.Module):
 
     def forward(self, data):
         blocks = self.backbone(data[:, :3, :, :])
-        depth = data[:, 3:, :, :]
+        depth = data[:, 3:, :, :]                           #Extracting Depth Maps only from Image Input (4th channel)
         v3plus_feature, feat = self.head(blocks, depth)      # (b, c, h, w)
         b, c, h, w = v3plus_feature.shape
 
@@ -99,7 +98,7 @@ class SingleNetwork(nn.Module):
 
         if self.training:
             return v3plus_feature, pred
-        return pred, feat, v3plus_feature
+        return pred, feat, v3plus_feature #v3_plus is output of concatenated maps + conv, feat is pre conv
 
     # @staticmethod
     def _nostride_dilate(self, m, dilate):
@@ -131,7 +130,7 @@ class ASPP(nn.Module):
         # add initial conv to append to low level features, both depth streams
         # will be appended to the same areas
 
-        self.depth_downsample = nn.Sequential(
+        self.depth_downsample = nn.Sequential(      #Depth change, downsample
             nn.Conv2d(
                 1,
                 256,
@@ -142,7 +141,7 @@ class ASPP(nn.Module):
             norm_act(256),
             nn.LeakyReLU())
 
-        self.depth_map_convs = nn.ModuleList([
+        self.depth_map_convs = nn.ModuleList([      #Depth change, add conv
             nn.Conv2d(256, hidden_channels, 1, bias=False),
             nn.Conv2d(256, hidden_channels, 3, bias=False, dilation=dilation_rates[0],
                       padding=dilation_rates[0]),
@@ -152,12 +151,12 @@ class ASPP(nn.Module):
                       padding=dilation_rates[2])
         ])
 
-        self.pool_depth = nn.Sequential(
+        self.pool_depth = nn.Sequential(            #Depth change - pooling
             nn.AdaptiveAvgPool2d(
                 (1, 1)), nn.Conv2d(
                 256, hidden_channels, kernel_size=1, bias=False))
 
-        self.pool_img = nn.Sequential(
+        self.pool_u2pl = nn.Sequential(
             nn.AdaptiveAvgPool2d(
                 (1, 1)), nn.Conv2d(
                 in_channels, hidden_channels, kernel_size=1, bias=False))
@@ -208,7 +207,7 @@ class ASPP(nn.Module):
         # Map convolutions
         _, _, h, w = x.size()
         out1 = F.interpolate(
-            self.pool_img(x), size=(h, w), mode="bilinear", align_corners=True
+            self.pool_u2pl(x), size=(h, w), mode="bilinear", align_corners=True
         )
         aspp_list = [m(x) for m in self.map_convs]
         aspp_list.insert(0, out1)
@@ -218,6 +217,7 @@ class ASPP(nn.Module):
         out = self.red_conv(out)
         out = self.leak_relu(out)
 
+        #Depth operations - downsample, bilinear, aspp, concat and then activation functions
         d = self.depth_downsample(d)
         _, _, h_d, w_d = d.size()
         depth_1 = F.interpolate(self.pool_depth(d), size=(
@@ -299,6 +299,7 @@ class Head(nn.Module):
             norm_act(256, momentum=bn_momentum),
             nn.ReLU(),
         )
+        #In channels are 768 vs normal 512 since concatenating backbone features, aspp image features and depth aspp features
         self.last_conv = nn.Sequential(
             nn.Conv2d(
                 768, 256, kernel_size=3, stride=1, padding=1, bias=False), norm_act(
@@ -309,7 +310,6 @@ class Head(nn.Module):
     def forward(self, f_list, depth):
         f = f_list[-1]
         f1, depth1 = self.aspp(f, depth)
-        
 
         low_level_features = f_list[0]
         low_h, low_w = low_level_features.size(2), low_level_features.size(3)
@@ -323,7 +323,7 @@ class Head(nn.Module):
             align_corners=True)
 
         f3 = torch.cat((f2, depth1, low_level_features), dim=1)
-        embed_feat = torch.concat((f2, depth1), dim=1)
+        embed_feat = torch.concat((f2, depth1), dim=1)  #embed feats is aspp and depth aspp feats concatenated
         f4 = self.last_conv(f3)
 
         return f4, embed_feat

@@ -292,7 +292,7 @@ class CityScape(BaseDataset):
             names = self._file_names[index]
         # - changed to .jpg since images have JPG prefix not PNG, os.path.join(self._img_path, names[0])
         img_path = self._img_path + names[0].split('.')[0] + '.jpg'
-        dpath = self._img_path + 'depth_adabins/' + names[0].split('/')[3]
+        dpath = self._img_path + '/depth_gen/' + conzeft.depth_ckpt + names[0].split('/')[3]
         # os.path.join(self._gt_path, names[1])
         if conzeft.weak_labels and self._split_name == 'train':
             names_split = names[1].split('/')

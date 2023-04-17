@@ -9,10 +9,12 @@ export epochs=35
 export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
+export mode="Contrastive-Concat-Semi-Supervision"
+export debug="False"
 
-export volna="/home/extraspace/Datasets/Datasets/cityscapes/city/"
-export OUTPUT_PATH="/home/extraspace/Runs/CPS/Semi/1-$ratio/"
-export snapshot_dir="/home/extraspace/Runs/CPS/Semi/1-$ratio/depth_concat/$learning_rate_$epochs"
+export volna="/mnt/Dataset/city/"
+export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'
+export snapshot_dir='/mnt/Dataset/Logs/SSL/CPS/Semi/'
 
 
 python train_contrastive_depth_concat.py  #-m torch.distributed.launch --nproc_per_node=$NGPUS  #https://pytorch.org/docs/stable/elastic/run.html

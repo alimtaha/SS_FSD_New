@@ -10,13 +10,13 @@ export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
 export mode="Concat-Semi-Supervision"
-export debug="True"
+export debug="False"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'
 export snapshot_dir='/mnt/Dataset/Logs/SSL/CPS/Semi/'
 
-python train_depth_concat.py  #-m torch.distributed.launch --nproc_per_node=$NGPUS  #https://pytorch.org/docs/stable/elastic/run.html
+python train_configurable.py  #-m torch.distributed.launch --nproc_per_node=$NGPUS  #https://pytorch.org/docs/stable/elastic/run.html
 export TARGET_DEVICE=$[$NGPUS-1]                                    #https://pytorch.org/docs/stable/distributed.html - scroll down for explanation of launch
 #python eval.py -e 110-137 -d 0-$TARGET_DEVICE --save_path $OUTPUT_PATH/results
 

@@ -92,7 +92,7 @@ class SingleNetwork(nn.Module):
 
     def forward(self, data):
         blocks = self.backbone(data)
-        v3plus_feature = self.head(blocks)      # (b, c, h, w)
+        v3plus_feature, feat = self.head(blocks)     #Embedding Change - added feat # (b, c, h, w)
         b, c, h, w = v3plus_feature.shape
 
         pred = self.classifier(v3plus_feature)
@@ -108,7 +108,7 @@ class SingleNetwork(nn.Module):
 
         if self.training:
             return v3plus_feature, pred
-        return pred
+        return pred, feat, v3plus_feature
 
     # @staticmethod
     def _nostride_dilate(self, m, dilate):
@@ -139,14 +139,16 @@ class ASPP(nn.Module):
         self.pool_u2pl = nn.Sequential(
             nn.AdaptiveAvgPool2d(
                 (1, 1)), nn.Conv2d(
-                256, hidden_channels, kernel_size=1, dilation=1, bias=False))
+                in_channels, hidden_channels, kernel_size=1, dilation=1, bias=False))
+        #Changed pool_u2pl input channels to in_channels variable from 256
+
         self.map_convs = nn.ModuleList(
             [
                 nn.Conv2d(
                     in_channels,
                     hidden_channels,
                     1,
-                    dilation=1,
+                    dilation=1,     #dilation 1 is the same as no dilation
                     bias=False),
                 nn.Conv2d(
                     in_channels,
@@ -274,22 +276,22 @@ class Head(nn.Module):
 
     def forward(self, f_list):
         f = f_list[-1]
-        f = self.aspp(f)
+        f1 = self.aspp(f)
         low_level_features = f_list[0]
         low_h, low_w = low_level_features.size(2), low_level_features.size(3)
         low_level_features = self.reduce(low_level_features)
-        f = F.interpolate(
-            f,
+        f2 = F.interpolate(
+            f1,
             size=(
                 low_h,
                 low_w),
             mode='bilinear',
             align_corners=True)
         # concatenate depth dimension here?
-        f = torch.cat((f, low_level_features), dim=1)
-        f = self.last_conv(f)
+        f3 = torch.cat((f2, low_level_features), dim=1)
+        f4 = self.last_conv(f3)
 
-        return f
+        return f4, f2   #f2 used for feature embeddings
 
 
 def count_params(model):

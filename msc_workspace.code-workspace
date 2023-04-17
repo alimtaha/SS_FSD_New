@@ -29,6 +29,9 @@
 		},
 		{
 			"path": "TB_utils"
+		},
+		{
+			"path": "envs"
 		}
 	]
 }

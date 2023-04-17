@@ -1,10 +1,11 @@
 from __future__ import division
 from functools import partial
 import sys
+import os
 from pathlib import Path
 import importlib
-sys.path.append('../../../')
-sys.path.append('../')
+sys.path.append(os.getcwd() + '/../../..')
+sys.path.append(os.getcwd() + '/..')
 from exp_city.city8_res50v3_CPS_CutMix.custom_collate import SegCollate
 #import mask_gen_depth
 #from tensorboardX import SummaryWriter
@@ -132,7 +133,7 @@ def main(config, checkpoint_dir=None, engine=None, optim='SGD', optimising=False
 
 
     if os.getenv('debug') is not None:
-        is_debug = True if (os.environ['debug']) == 'True' else False
+        is_debug = bool(os.environ['debug'])
     else:
         is_debug = False
 

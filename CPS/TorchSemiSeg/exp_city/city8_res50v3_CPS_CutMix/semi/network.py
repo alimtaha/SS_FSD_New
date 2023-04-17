@@ -77,7 +77,7 @@ class SingleNetwork(nn.Module):
 
     def forward(self, data):
         blocks = self.backbone(data)
-        v3plus_feature = self.head(blocks)      # (b, c, h, w)
+        v3plus_feature, feat = self.head(blocks)      # (b, c, h, w)
         b, c, h, w = v3plus_feature.shape
 
         pred = self.classifier(v3plus_feature)
@@ -93,7 +93,7 @@ class SingleNetwork(nn.Module):
 
         if self.training:
             return v3plus_feature, pred
-        return pred
+        return pred, feat, v3plus_feature
 
     # @staticmethod
     def _nostride_dilate(self, m, dilate):
@@ -121,7 +121,7 @@ class ASPP(nn.Module):
         super(ASPP, self).__init__()
         self.pooling_size = pooling_size
 
-        self.pool_img = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)), nn.Conv2d(
+        self.pool_u2pl = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)), nn.Conv2d(
             in_channels, hidden_channels, kernel_size=1, dilation=1, bias=False))
         self.map_convs = nn.ModuleList(
             [
@@ -170,7 +170,7 @@ class ASPP(nn.Module):
         # Map convolutions
         _, _, h, w = x.size()
         out1 = F.interpolate(
-            self.pool_img(x), size=(h, w), mode="bilinear", align_corners=True
+            self.pool_u2pl(x), size=(h, w), mode="bilinear", align_corners=True
         )
         aspp_list = [m(x) for m in self.map_convs]
         aspp_list.insert(0, out1)
@@ -272,7 +272,7 @@ class Head(nn.Module):
         f3 = torch.cat((f2, low_level_features), dim=1)
         f4 = self.last_conv(f3)
 
-        return f4
+        return f4, f2
 
 
 def count_params(model):

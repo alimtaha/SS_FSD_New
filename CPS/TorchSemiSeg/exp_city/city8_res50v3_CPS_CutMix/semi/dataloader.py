@@ -245,7 +245,14 @@ class CityScape(BaseDataset):
         else:
             names = self._file_names[index]
         # - changed to .jpg since images have JPG prefix not PNG, os.path.join(self._img_path, names[0])
+        
+        #Only needed if using leftImg8bit folder
+        #city_name = names[0].split('/')[-1].split('_')[0]
+        #new_path = names[0].split('/')[-2:].replace('/train/', '/train/' + city_name + '/').replace('.jpg', '.png')
+        #img_path = self._img_path + new_path
+
         img_path = self._img_path + names[0].split('.')[0] + '.jpg'
+        
         # os.path.join(self._gt_path, names[1])
         if config.weak_labels:
             names_split = names[1].split('/')
@@ -279,7 +286,7 @@ class CityScape(BaseDataset):
             'train',
             'trainval',
             'train_aug',
-                'trainval_aug']:
+            'trainval_aug']:
             # image converted to torch array
             img = torch.from_numpy(np.ascontiguousarray(img)).float()
             if gt is not None:

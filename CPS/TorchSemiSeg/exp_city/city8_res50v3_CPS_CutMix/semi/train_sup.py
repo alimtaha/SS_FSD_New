@@ -1,6 +1,9 @@
 from __future__ import division
+import sys
+import os
+sys.path.append(os.getcwd() + '/../../..')
+sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
-from tensorboardX import SummaryWriter
 from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision
 from furnace.engine.evaluator import Evaluator
 from furnace.utils.pyt_utils import load_model
@@ -19,6 +22,7 @@ from config import config
 from PIL import Image
 from dataloader import TrainValPre
 from torch.utils import data
+from torch.utils.tensorboard import SummaryWriter
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
 import torch.nn.functional as F
@@ -34,21 +38,10 @@ import time
 import uuid
 import os
 import os.path as osp
-import sys
-sys.path.append('../../')
-#import ignite.engine as i_engine
-#from ignite.handlers import *
-#from ignite.metrics import *
-#from ignite.utils import *
-#from ignite.contrib.metrics.regression import *
-#from ignite.contrib.metrics import *
 
 '''
-
 VALIDATION NEEDS TO BE CHANGED TO ONLY EVERY CONFIG.VALIDATE_EVERY
-
 MODEL PATH BEING SAVED NEEDS TO BE CHANGED BACK TO EVERY EPOCH
-
 '''
 
 #from furnace.seg_opr.sync_bn import DataParallelModel, Reduce, BatchNorm2d
@@ -72,7 +65,7 @@ except:
     azure = False
 '''
 if os.getenv('debug') is not None:
-    is_debug = os.environ['debug']
+    is_debug = bool(os.environ['debug'])
 else:
     is_debug = False
 
@@ -105,15 +98,10 @@ def compute_metric(results):
     # can now be called without first initialising the eval file
     print(len(CityScape.get_class_names()))
 
-    '''
-        if azure:
-            mean_IU = np.nanmean(iu)*100
-            run.log(name='Test/Val-mIoU', value=mean_IU)
-        '''
     return iu, mean_IU, _, mean_pixel_acc
 
 
-def viz_image(imgs, gts, pred, step, epoch, step_test=None):
+def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
     image_viz = (imgs[0,
                       :,
                       :,
@@ -133,12 +121,12 @@ def viz_image(imgs, gts, pred, step, epoch, step_test=None):
     comp_img = comp_img.transpose(2, 0, 1)
     if step_test is None:
         logger.add_image(
-            f'Training/Epoch_{epoch}/Image_Pred_GT_{step}',
+            f'Training/Epoch_{epoch}/Image_Pred_GT_{step}_{name}',
             comp_img,
             step)
     else:
         logger.add_image(
-            f'Val/Epoch_{epoch}/Val_Step_{step/config.validate_every}/Image_Pred_GT_{step_test}',
+            f'Val/Epoch_{epoch}/Val_Step_{step/config.validate_every}/Image_Pred_GT_{step_test}_{name}',
             comp_img,
             step)
 
@@ -159,18 +147,15 @@ collate_fn = SegCollate()
 # + '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
 tb_dir = config.tb_dir
 logger = SummaryWriter(
+    log_dir= config.tb_dir,
+    comment=experiment_name
+    )
+
+v3_embedder = SummaryWriter(
     log_dir=tb_dir +
-    '/' +
-    experiment_name +
-    '_' +
-    time.strftime(
-        "%b%d_%d-%H-%M",
-        time.localtime()),
+    '_v3embedder',
     comment=experiment_name)
-
-
 parser = argparse.ArgumentParser()
-
 os.environ['MASTER_PORT'] = '169711'
 
 with Engine(custom_parser=parser) as engine:
@@ -190,12 +175,14 @@ with Engine(custom_parser=parser) as engine:
 
     if engine.local_rank == 0:
         generate_tb_dir = config.tb_dir + '/tb'
-        engine.link_tb(tb_dir, generate_tb_dir)
+        #engine.link_tb(tb_dir, generate_tb_dir)
 
-    experiment_name = "Road_Only"
-    run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{config.batch_size}-tep{config.nepochs}-lr{config.lr}-wd{config.weight_decay}-{uuid.uuid4()}"
-    name = f"{experiment_name}_{run_id}"
+    # experiment_name = "RoadOnly_FullySupervised_"
+    # run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{config.batch_size}-tep{config.nepochs}-lr{config.lr}-wd{config.weight_decay}"
+    # name = f"{experiment_name}_{run_id}"
     #wandb.init(project=PROJECT, name=name, tags='Road Only', entity = "alitaha")
+
+    path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
 
     # config network and criterion
     # this is used for the min kept variable in CrossEntropyLess, basically
@@ -335,6 +322,11 @@ with Engine(custom_parser=parser) as engine:
     #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
 
     step = 0
+    best_miou = 0
+    iu_last = 0
+    mean_IU_last = 0
+    mean_pixel_acc_last = 0
+    loss_sup_test_last = 0
     model.train()
     print('begin train')
 
@@ -358,12 +350,8 @@ with Engine(custom_parser=parser) as engine:
         #wandb.log({"Epoch": epoch}, step=step)
         logger.add_scalar('Epoch', epoch, step)
 
-        # the reason the dataloaders are wrapped in a iterator and then the
-        # .next() method is used to load the next images is because the
-        # traditional 'for batch in dataloader' can't be used since using tqdm
         dataloader = iter(train_loader)
-        # unsupervised_dataloader_0 = iter(unsupervised_train_loader_0)                   # therefore the batch will instead be iterarted within each training loop using dataloader.next()
-        #unsupervised_dataloader_1 = iter(unsupervised_train_loader_1)
+
 
         sum_loss_sup = 0
         sum_loss_sup_r = 0
@@ -377,7 +365,7 @@ with Engine(custom_parser=parser) as engine:
             engine.update_iteration(epoch, idx)
             start_time = time.time()
 
-            minibatch = dataloader.next()
+            minibatch = next(dataloader)
 
             imgs = minibatch['data']
             gts = minibatch['label']
@@ -420,7 +408,8 @@ with Engine(custom_parser=parser) as engine:
             *- Label doesn't need to be permuted from data loader, however either
             '''
 
-            print_str = 'Epoch{}/{}'.format(epoch, config.nepochs) \
+            print_str = 'WEAK LABELS! ' if config.weak_labels else '' \
+                        + 'Epoch{}/{}'.format(epoch, config.nepochs) \
                         + ' Iter{}/{}:'.format(idx + 1, config.fully_sup_iters) \
                         + ' lr=%.2e' % lr \
                         + ' loss_sup=%.2f' % loss_sup.item()  # \
@@ -441,7 +430,8 @@ with Engine(custom_parser=parser) as engine:
                     #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
                     # wandb.log({"examples": images}
 
-            if step % config.validate_every == 0:
+            if step % config.validate_every == 0 or (
+                    is_debug and step % 10 == 0):
                 all_results = []
                 prec_road = []
                 prec_non_road = []
@@ -466,6 +456,10 @@ with Engine(custom_parser=parser) as engine:
                 model.eval()
                 loss_sup_test = 0
                 step_test = 0
+                v3_feats_sample = None
+                v3_labels_sample = None
+                feats_sample = None
+                feats_labels_sample = None
                 with torch.no_grad():
                     for batch_test in tqdm(
                             test_loader,
@@ -476,7 +470,75 @@ with Engine(custom_parser=parser) as engine:
 
                         imgs_test = batch_test['data'].to(device)
                         gts_test = batch_test['label'].to(device)
-                        pred_test = model.branch1(imgs_test)
+                        #pred_test = model.branch1(imgs_test)
+                        #Embedding
+                        pred_test, _, v3_feats = model.branch1(imgs_test)
+
+                        subset = 2000
+
+                        #project embeddings
+                        if (step-config.embed_every) % config.embed_every == 0:
+
+                            if step_test % 10 == 0:
+
+                                _, h, w = gts_test.shape
+                                v3_feats = F.interpolate(
+                                    v3_feats,
+                                    size=(
+                                    h,
+                                    w),
+                                    mode='bilinear',
+                                    align_corners=True)
+
+                                _, d, v_h, v_w = v3_feats.shape
+                                v3_feats = v3_feats[0,...].view(d, -1).permute(1,0)
+                                v3_labels = gts_test[0,...].view(-1).unsqueeze(1)
+
+                                v3_feats_idx = np.arange(v3_labels.shape[0])
+                                v3_feats_idx = np.random.choice(v3_feats_idx, subset, replace=False)
+
+                                # Feats not being used only V3+ Embedded since masking and then passing into model is not acurate
+                                # #generate label mask
+                                # non_road_mask = (gts_test > 0)
+                                # road_mask = ~non_road_mask
+
+                                # #apply mask
+                                # road_only = imgs_test*road_mask.long()
+                                # non_road_only = imgs_test*non_road_mask.long()
+
+                                # #pass through model
+                                # _, road_feats, _ = model(road_only)
+                                # _, non_road_feats, _ = model(non_road_only)
+
+                                # _, d, _, _ = road_feats.shape
+                                # road_feats = road_feats[0,...].view(d, -1).permute(1,0)
+                                # non_road_feats = non_road_feats[0,...].view(d, -1).permute(1,0)
+
+                                # n, _ = road_feats.shape
+                                # #generating labels
+                                # road_labels = torch.zeros((n, 1))
+                                # non_road_labels = torch.ones((n, 1))
+
+                                # #concat feats and labels
+                                # feats_combined = torch.concat((road_feats, non_road_feats), dim=0)
+                                # labels_combined = torch.concat((road_labels, non_road_labels), dim=0)
+
+                                # #random indices generated for embedding
+                                # feats_idx = np.arange(labels_combined.shape[0])
+                                # feats_idx = np.random.choice(feats_idx, subset, replace=False)
+
+                                for x in range(subset):
+                                    if v3_feats_sample == None:
+                                        v3_feats_sample = v3_feats[0,...].unsqueeze(0)
+                                        v3_labels_sample = v3_labels[0,...].unsqueeze(0)
+                                        # feats_sample = feats_combined[0,...].unsqueeze(0)
+                                        # feats_labels_sample = labels_combined[0,...].unsqueeze(0)
+                                    else:
+                                        v3_feats_sample = torch.concat((v3_feats_sample, v3_feats[v3_feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        v3_labels_sample = torch.concat((v3_labels_sample, v3_labels[v3_feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        # feats_sample = torch.concat((feats_sample, feats_combined[feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        # feats_labels_sample = torch.concat((feats_labels_sample, labels_combined[feats_idx[x],...].unsqueeze(0)), dim=0)
+
                         loss_sup_test = loss_sup_test + \
                             criterion(pred_test, gts_test)
                         pred_test_max = torch.argmax(
@@ -499,30 +561,26 @@ with Engine(custom_parser=parser) as engine:
                             'correct': correct_tmp}
                         all_results.append(results_dict)
 
-                        if epoch + 1 > 30:
-                            if step_test % 20 == 0:
+                        if epoch + 1 > 300:
+                            if step_test % 50 == 0:
                                 viz_image(
                                     imgs_test, gts_test, pred_test, step, epoch, step_test)
-                        elif step_test % 50 == 0:
+                        elif step_test % 100 == 0:
                             viz_image(
                                 imgs_test, gts_test, pred_test, step, epoch, step_test)
 
                 iu, mean_IU, _, mean_pixel_acc = compute_metric(all_results)
                 loss_sup_test = loss_sup_test / len(test_loader)
-                #metrics = log_val_results(evaluator)
-                #pa = metrics["pixel accuracy"]
-                #ap = metrics["average precision"]
-                #ar = metrics["average recall"]
-                #miou = metrics["average iou"]
-                #f1 = metrics["F1 Score"]
-                #iou = metrics["IoU"]
-                #loss = metrics["Loss"]
-                #loss_average = loss / len(test_loader)
-                #logger.add_scalar('Val/Pixel_Accuracy', pa, step)
-                #logger.add_scalar('Val/Average_Precision', ap, step)
-                #logger.add_scalar('Val/Average_Recall', ar, step)
-                #logger.add_scalar('Val/mIoU', miou, step)
-                #logger.add_scalar('Val/F1_Score', (f1[0]+f1[1])/len(f1), step)
+
+                if mean_IU > mean_IU_last and loss_sup_test < loss_sup_test_last:
+                        if os.path.exists(path_best):
+                            os.remove(path_best)
+                        engine.save_checkpoint(path_best)
+
+                mean_IU_last = mean_IU
+                mean_pixel_acc_last = mean_pixel_acc
+                loss_sup_test_last = loss_sup_test
+
                 print('Supervised Training Validation Set Loss', loss)
                 #print(f"Validation Metrics after {step} steps: \nPixel Accuracy {pa}\nAverage Precision {ap}\nAverage Recall {ar}\nmIoU {miou}\nIoU {iou}\nF1 Score {f1}")
                 _ = print_iou(iu, mean_pixel_acc,
@@ -560,37 +618,69 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
+                if (step-config.embed_every) % config.embed_every == 0:
+                    #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
+                    v3_embedder.add_embedding(v3_feats_sample, v3_labels_sample, global_step=step)
+                    print('embedding added at step', step)
+
+                if mean_IU > best_miou:
+                    best_miou = mean_IU
+                    best_metrics = { 
+                        'miou': mean_IU*100,
+                        'iou_road': iu[0]*100,
+                        'iou_nonroad': iu[1]*100,
+                        'accuracy': round(mean_pixel_acc*100, 2),
+                        'prec_road': round(prec_recall_metrics[0]*100, 2),
+                        'prec_non_road': round(prec_recall_metrics[1]*100, 2),
+                        'recall_road': round(prec_recall_metrics[2]*100, 2),
+                        'recall_non_road': round(prec_recall_metrics[3]*100, 2),
+                        'mean_prec': round(prec_recall_metrics[4]*100, 2),
+                        'mean_recall': round(prec_recall_metrics[5]*100, 2),
+                        'f1_score': round(f1_score, 2)
+                    }
+
                 model.train()
 
             pbar.set_description(print_str, refresh=False)
 
             end_time = time.time()
 
-    # if engine.distributed and (engine.local_rank == 0):
-    #logger.add_scalar('train_loss_sup', sum_loss_sup / len(pbar), epoch)
-    #logger.add_scalar('train_loss_sup_r', sum_loss_sup_r / len(pbar), epoch)
-    #logger.add_scalar('train_loss_cps', sum_cps / len(pbar), epoch)
+    hparams_dict = {
+        'bn_eps': config.bn_eps,
+        'bn_momentum': config.bn_momentum,
+        'cps_weight': config.cps_weight,
+        'contrast_weight': config.contrast_weight,
+        'sup_contrast_weight': config.sup_contrast_weight,
+        'labeled_ratio': config.labeled_ratio,
+        'batch_size': config.batch_size,
+        'optimiser': str(config.optimiser),
+        'lr_power': config.lr_power,
+        'fig.adam': str(config.adam_betas),
+        'momentum': config.momentum,
+        'fig.opti': str(config.optim_params),
+        'weight_d': config.weight_decay,
+        'attn_lr_': config.attn_lr_factor,
+        'head_lr_': config.head_lr_factor,
+        'attn_hea': config.attn_heads,
+        'batch_si': config.batch_size,
+        'lr': config.lr,
+        'image_height': config.image_height,
+        'image_width': config.image_width,
+        'dimage_mean': config.dimage_mean,
+        'dimage_std': config.dimage_std,
+        'num_classes': config.num_classes
+    }
 
-    '''
-    if azure and engine.local_rank == 0:
-        run.log(name='Supervised Training Loss', value=sum_loss_sup / len(pbar))
-        run.log(name='Supervised Training Loss right', value=sum_loss_sup_r / len(pbar))
-        run.log(name='Supervised Training Loss CPS', value=sum_cps / len(pbar))
-    '''
+    logger.add_hparams(hparams_dict, best_metrics)
 
     # if '''(epoch > config.nepochs // 6) and''' (epoch % config.snapshot_iter
     # == 0) or (epoch == config.nepochs - 1):
 
-    if epoch % 20 == 0:
-        if engine.distributed and (engine.local_rank == 0):
-            engine.save_and_link_checkpoint(config.snapshot_dir,
-                                            config.log_dir,
-                                            config.log_dir_link, epoch)
-        elif not engine.distributed:
-            engine.save_and_link_checkpoint(config.snapshot_dir,
-                                            config.log_dir,
-                                            config.log_dir_link, epoch)
-        elif epoch > 150 and epoch % 10 == 0:
-            engine.save_and_link_checkpoint(config.snapshot_dir,
-                                            config.log_dir,
-                                            config.log_dir_link, epoch)
+    if engine.distributed and (engine.local_rank == 0):
+        engine.save_and_link_checkpoint(config.snapshot_dir,
+                                    config.log_dir,
+                                    None, epoch)
+    elif not engine.distributed:
+        engine.save_and_link_checkpoint(config.snapshot_dir,
+                                    config.log_dir,
+                                    None, epoch)

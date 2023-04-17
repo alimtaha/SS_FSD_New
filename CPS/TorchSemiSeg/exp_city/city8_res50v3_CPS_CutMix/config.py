@@ -8,6 +8,7 @@ import os
 import os.path as osp
 import sys
 import time
+from datetime import datetime as dt
 import numpy as np
 from easydict import EasyDict as edict
 import argparse
@@ -37,78 +38,19 @@ remoteip = os.popen('pwd').read()
 if os.getenv('volna') is not None:
     C.volna = os.environ['volna']
 else:
+    if C.aws:
     # the path to the data dir.
-    C.volna = '/home/extraspace/Datasets/Datasets/cityscapes/city/'
+        C.volna = '/mnt/Dataset/city'
+    else:
+        C.volna = '/home/extraspace/Datasets/Datasets/cityscapes/city'
+
 
 """please config ROOT_dir and user when u first using"""
 C.repo_name = 'TorchSemiSeg'
 C.abs_dir = osp.realpath(".")
 C.this_dir = C.abs_dir.split(osp.sep)[-1]
 C.weak_labels = False
-
-#to unify all scripts into one master script, modes are used
-#modes are depth_concat, contrastive_depth_concat, crossattention_depth_concat - more to be added (semi-super, fully-super, depth-append)
-C.mode = os.environ['mode']         
-
-#future config to be added to allow all labels
-
-#C.root_dir = C.abs_dir[:C.abs_dir.index(C.repo_name) + len(C.repo_name)]
-if C.aws is False:
-    C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/SS_FSD_New/CPS/TorchSemiSeg'
-    C.log_dir = '/home/extraspace/Logs/SSL/CPS/'
-    C.tb_dir = C.log_dir  # osp.abspath(osp.join(C.log_dir, "tb"))
-    """Data Dir and Weight Dir"""
-    C.dataset_path = C.volna
-    C.img_root_folder = C.dataset_path
-    C.gt_root_folder = C.dataset_path
-    C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
-    #C.log_dir_link = osp.join(C.abs_dir, 'log')
-else:
-    C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/SS_FSD_New/CPS/TorchSemiSeg'
-    C.log_dir = '/home/extraspace/Logs/SSL/CPS/'
-    C.tb_dir = C.log_dir  # osp.abspath(osp.join(C.log_dir, "tb"))
-    """Data Dir and Weight Dir"""
-    C.dataset_path = C.volna
-    C.img_root_folder = C.dataset_path
-    C.gt_root_folder = C.dataset_path
-    C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
-    #C.log_dir_link = osp.join(C.abs_dir, 'log')
-
-# snapshot dir that stores checkpoints
-if os.getenv('snapshot_dir'):
-    C.snapshot_dir = osp.join(os.environ['snapshot_dir'], "snapshot")
-else:
-    C.snapshot_dir = osp.abspath(osp.join(C.log_dir, "snapshot"))
-
-exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
-C.log_file = C.log_dir + '/log_' + exp_time + '.log'
-#C.link_log_file = C.log_file + '/log_last.log'
-C.val_log_file = C.log_dir + '/val_' + exp_time + '.log'
-#C.link_val_log_file = C.log_dir + '/val_last.log'
-
-"""Path Config"""
-def add_path(path):
-    if path not in sys.path:
-        sys.path.insert(0, path)
-
-add_path(osp.join(C.root_dir, 'furnace'))
-
-
-''' Experiments Setting '''
 C.labeled_ratio = int(os.environ['ratio'])
-C.train_source = osp.join(
-    C.dataset_path, "config_new/subset_train/train_aug_labeled_1-{}.txt".format(C.labeled_ratio))
-C.train_source = osp.join(
-    C.dataset_path, "config_new/subset_train/train_aug_labeled_1-{}.txt".format(C.labeled_ratio))
-C.unsup_source = osp.join(
-    C.dataset_path, "config_new/subset_train/train_aug_unlabeled_1-{}.txt".format(C.labeled_ratio))
-C.unsup_source_1 = osp.join(
-    C.dataset_path,
-    "config_new/subset_train/train_aug_unlabeled_1-{}_shuffle.txt".format(
-        C.labeled_ratio))
-C.eval_source = osp.join(C.dataset_path, "config_new/val.txt")
-C.test_source = osp.join(C.dataset_path, "config_new/test.txt")
-C.demo_source = osp.join(C.dataset_path, "config_new/demo.txt")
 
 C.is_test = False
 C.fix_bias = True
@@ -150,10 +92,10 @@ C.num_classes = 2                              # need to change for training fre
 C.background = 100  # background changed to the class for the padding when cropping
 C.image_mean = np.array([0.485, 0.456, 0.406])  # 0.485, 0.456, 0.406
 C.image_std = np.array([0.229, 0.224, 0.225])
-C.dimage_mean = 22.779  # Update this based on additoin of val and test images
-C.dimage_std = 19.110
-C.image_height = 400
-C.image_width = 400
+C.dimage_mean = 29.091  #Generated using full train & val & test sets on NewCRFs 256 Depth Maps
+C.dimage_std = 31.799
+C.image_height = 600
+C.image_width = 600
 # if ratio is 8, becomes 371 (// returns the int of the division)
 C.num_train_imgs = 2975 // C.labeled_ratio
 C.num_eval_imgs = 500
@@ -196,7 +138,7 @@ C.cold_start = 0
 C.niters_per_epoch = C.max_samples // C.batch_size  # 2604 / 2 for me
 C.fully_sup_iters = C.num_train_imgs // C.batch_size
 
-C.num_workers = 4
+C.num_workers = 8
 
 print(
     bcolors.WARNING +
@@ -231,5 +173,72 @@ C.warm_up_epoch = 0  # experiment with warm up epoch
 C.validate_every = 695  # C.max_samples
 C.embed_every = C.validate_every*4
 
-C.v3_path = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/exp_city/city8_res50v3_CPS_CutMix/v3_array.npy'
-C.feats_path = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/exp_city/city8_res50v3_CPS_CutMix/feats_array.npy'
+#to unify all scripts into one master script, modes are used
+#modes are depth_concat, contrastive_depth_concat, crossattention_depth_concat - more to be added (semi-super, fully-super, depth-append)
+C.mode = os.environ['mode'] + '_Ratio' + os.environ['ratio']         
+
+run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}"
+name = f"{C.mode}_{run_id}"
+
+C.log_dir = os.path.join(os.environ['snapshot_dir'], name)
+C.tb_dir = C.log_dir
+
+#future config to be added to allow all labels
+
+#C.root_dir = C.abs_dir[:C.abs_dir.index(C.repo_name) + len(C.repo_name)]
+
+if C.aws:
+    C.root_dir = '/home/ubuntu/SS_FSD_New/SS_FSD_New/CPS/TorchSemiSeg'
+    
+    """Data Dir and Weight Dir"""
+    C.dataset_path = C.volna
+    C.img_root_folder = '/mnt/Dataset/city'
+    C.gt_root_folder = '/mnt/Dataset/city'
+    C.pretrained_model = '/mnt/Dataset/models/backbones/resnet50_v1c.pth'
+    #C.log_dir_link = osp.join(C.abs_dir, 'log')
+else:
+    C.root_dir = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/SS_FSD_New/CPS/TorchSemiSeg'
+    """Data Dir and Weight Dir"""
+    C.dataset_path = C.volna
+    C.img_root_folder = C.dataset_path
+    C.gt_root_folder = C.dataset_path
+    C.pretrained_model = '/home/taha_a@WMGDS.WMG.WARWICK.AC.UK/Documents/ss_fsd/CPS/TorchSemiSeg/DATA/pytorch-weight/resnet50_v1c.pth'
+    #C.log_dir_link = osp.join(C.abs_dir, 'log')
+
+# snapshot dir that stores checkpoints
+# if os.getenv('snapshot_dir'):
+#     C.snapshot_dir = osp.join(os.environ['snapshot_dir'], "snapshot")
+# else:
+
+C.snapshot_dir = osp.abspath(osp.join(C.log_dir, "snapshot"))
+C.depth_ckpt = 'newcrfs_256.0_model-89964-best_silog_14.55338/'
+
+
+exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
+C.log_file = C.log_dir + '/log_' + exp_time + '.log'
+#C.link_log_file = C.log_file + '/log_last.log'
+C.val_log_file = C.log_dir + '/val_' + exp_time + '.log'
+#C.link_val_log_file = C.log_dir + '/val_last.log'
+
+"""Path Config"""
+def add_path(path):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+add_path(osp.join(C.root_dir, 'furnace'))
+
+
+''' Experiments Setting '''
+C.train_source = osp.join(
+    C.dataset_path, "config_new/subset_train/train_aug_labeled_1-{}.txt".format(C.labeled_ratio))
+C.train_source = osp.join(
+    C.dataset_path, "config_new/subset_train/train_aug_labeled_1-{}.txt".format(C.labeled_ratio))
+C.unsup_source = osp.join(
+    C.dataset_path, "config_new/subset_train/train_aug_unlabeled_1-{}.txt".format(C.labeled_ratio))
+C.unsup_source_1 = osp.join(
+    C.dataset_path,
+    "config_new/subset_train/train_aug_unlabeled_1-{}_shuffle.txt".format(
+        C.labeled_ratio))
+C.eval_source = osp.join(C.dataset_path, "config_new/val.txt")
+C.test_source = osp.join(C.dataset_path, "config_new/test.txt")
+C.demo_source = osp.join(C.dataset_path, "config_new/demo.txt")

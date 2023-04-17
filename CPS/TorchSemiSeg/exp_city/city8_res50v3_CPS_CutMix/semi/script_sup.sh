@@ -3,16 +3,18 @@ nvidia-smi
 
 export NGPUS=1
 export learning_rate=0.002
-export batch_size=4
+export batch_size=2
 export snapshot_iter=2
-export epochs=490
+export epochs=495
 export ratio=16
 export CPU_DIST_ONLY=False
 export WORLD_SIZE=1
+export mode="Full-Supervision"
+export debug="False"
 
-export volna="/home/extraspace/Datasets/Datasets/cityscapes/city/"
-export OUTPUT_PATH="/home/extraspace/Runs/CPS/Full/"
-export snapshot_dir="/home/extraspace/Runs/CPS/Full/"
+export volna="/mnt/Dataset/city/"
+export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Full/'
+export snapshot_dir='/mnt/Dataset/Logs/SSL/CPS/Full/'
 
 
 python train_sup.py  #-m torch.distributed.launch --nproc_per_node=$NGPUS  #https://pytorch.org/docs/stable/elastic/run.html

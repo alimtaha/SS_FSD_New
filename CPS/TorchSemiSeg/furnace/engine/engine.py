@@ -196,8 +196,9 @@ class Engine(object):
             name=None):
         ensure_dir(snapshot_dir)
         dt = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        if not osp.exists(log_dir_link):  # test whether a path exists
-            link_file(log_dir, log_dir_link)
+        if log_dir_link is not None:
+            if not osp.exists(log_dir_link):  # test whether a path exists
+                link_file(log_dir, log_dir_link)
         if name is None:
             current_epoch_checkpoint = osp.join(
                 snapshot_dir, '{}-epoch-{}.pth'.format(dt, epoch))

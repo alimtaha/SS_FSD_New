@@ -1,7 +1,12 @@
 from __future__ import division
+import os.path as osp
+import sys
+import os
+sys.path.append(os.getcwd() + '/../../..')
+sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
 import mask_gen_depth
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from matplotlib import pyplot as plt
 from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision
 from furnace.engine.evaluator import Evaluator
@@ -12,12 +17,12 @@ from furnace.engine.lr_policy import WarmUpPolyLR
 from furnace.utils.visualize import print_iou, show_img
 from furnace.utils.init_func import init_weight, group_weight
 from furnace.utils.img_utils import generate_random_uns_crop_pos
-from ignite.contrib.metrics import *
-from ignite.contrib.metrics.regression import *
-from ignite.utils import *
-from ignite.metrics import *
-from ignite.handlers import *
-import ignite.engine as i_engine
+# from ignite.contrib.metrics import *
+# from ignite.contrib.metrics.regression import *
+# from ignite.utils import *
+# from ignite.metrics import *
+# from ignite.handlers import *
+# import ignite.engine as i_engine
 import random
 import cv2
 from eval_depth_append import SegEvaluator
@@ -44,17 +49,19 @@ import time
 import uuid
 import os
 import os.path as osp
-import sys
-sys.path.append('../../../')
-sys.path.append('../')
+
 
 '''NEEED TO UPDATE VALIDATION AND EVAL FILE AND VAL PRE ETC TO INCLIDE DEPTH VALUES AND NEW FUNCTIONS'''
 
 #from furnace.seg_opr.sync_bn import DataParallelModel, Reduce, BatchNorm2d
 
 PROJECT = 'CPS'
-experiment_name = str(config.nepochs) + 'E_SS' + \
-    str(config.labeled_ratio) + '_L' + str(config.lr) + '_AppendD'
+if config.weak_labels:
+    experiment_name = 'weak_labels' + '_AppendD' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
+else:
+    experiment_name = '_AppendD' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
 
 '''
 try:
@@ -71,7 +78,7 @@ except:
     azure = False
 '''
 if os.getenv('debug') is not None:
-    is_debug = os.environ['debug']
+    is_debug = bool(os.environ['debug'])
 else:
     is_debug = False
 
@@ -104,11 +111,6 @@ def compute_metric(results):
     # can now be called without first initialising the eval file
     print(len(CityScape.get_class_names()))
 
-    '''
-        if azure:
-            mean_IU = np.nanmean(iu)*100
-            run.log(name='Test/Val-mIoU', value=mean_IU)
-        '''
     return iu, mean_IU, _, mean_pixel_acc
 
 
@@ -175,16 +177,16 @@ else:
 # + '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
 tb_dir = config.tb_dir
 logger = SummaryWriter(
-    log_dir=tb_dir +
-    '/' +
-    experiment_name +
-    '_' +
-    time.strftime(
-        "%b%d_%d-%H-%M",
-        time.localtime()),
-    comment=experiment_name)
+    log_dir= config.tb_dir,
+    comment=experiment_name
+    )
 
+v3_embedder = SummaryWriter(
+    log_dir=tb_dir +
+    '_v3embedder',
+    comment=experiment_name)
 parser = argparse.ArgumentParser()
+os.environ['MASTER_PORT'] = '169711'
 
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
@@ -206,16 +208,13 @@ with Engine(custom_parser=parser) as engine:
     unsupervised_train_loader_1, unsupervised_train_sampler_1 = get_train_loader(
         engine, CityScape, train_source=config.unsup_source_1, unsupervised=True, collate_fn=collate_fn)
 
-    if engine.local_rank == 0:
-        generate_tb_dir = config.tb_dir + '/tb'
-        engine.link_tb(tb_dir, generate_tb_dir)
 
     #experiment_name = "Road_Only"
     #run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{config.batch_size}-tep{config.nepochs}-lr{config.lr}-wd{config.weight_decay}-{uuid.uuid4()}"
     #name = f"{experiment_name}_{run_id}"
     #wandb.init(project=PROJECT, name=name, tags='Road Only', entity = "alitaha")
 
-    path_best = osp.join(config.snapshot_dir, 'epoch-best_loss.pth')
+    path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
 
     # config network and criterion
     # this is used for the min kept variable in CrossEntropyLess, basically
@@ -248,11 +247,7 @@ with Engine(custom_parser=parser) as engine:
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
 
-    trainval_pre = TrainValPre(
-        config.image_mean,
-        config.image_std,
-        config.dimage_mean,
-        config.dimage_std)
+    trainval_pre = TrainValPre(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
 
     test_loader = data.DataLoader(test_dataset,
@@ -335,41 +330,10 @@ with Engine(custom_parser=parser) as engine:
 
     print("Number of Params", count_params(model))
 
-    def val_step(engine, batch):
-        model.eval()
-        loss_sup_test = 0
-        with torch.no_grad():
-            imgs_test = batch['data'].to(device)
-            gts_test = batch['label'].to(device)
-            pred_test = model.branch1(imgs_test)
-            loss_sup_test = loss_sup_test + criterion(pred_test, gts_test)
-        return gts_test, gts_test
-
-    evaluator = i_engine.Engine(val_step)
-    cm = ConfusionMatrix(num_classes=2)
-
-    val_metrics = {
-        "pixel accuracy": Accuracy(),
-        "average precision": Precision(average=True),
-        "average recall": Recall(average=True),
-        "IoU": IoU(cm),
-        "average iou": mIoU(cm),
-        # ignore index needs to be changed to 2 and set for all iou losses and
-        # F1
-        "F1 Score": DiceCoefficient(cm),
-        "Loss": Loss(criterion)
-    }
-
-    for name, metric in val_metrics.items():
-        metric.attach(evaluator, name)
-
-    def log_val_results(evaluator):
-        state = evaluator.run(test_loader)
-        return state.metrics
-
     #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
 
     step = 0
+    best_miou = 0
     iu_last = 0
     mean_IU_last = 0
     mean_pixel_acc_last = 0
@@ -436,9 +400,9 @@ with Engine(custom_parser=parser) as engine:
             engine.update_iteration(epoch, idx)
             start_time = time.time()
 
-            minibatch = dataloader.next()
-            unsup_minibatch_0 = unsupervised_dataloader_0.next()
-            unsup_minibatch_1 = unsupervised_dataloader_1.next()
+            minibatch = next(dataloader)
+            unsup_minibatch_0 = next(unsupervised_dataloader_0)
+            unsup_minibatch_1 = next(unsupervised_dataloader_1)
 
             imgs = minibatch['data']
             gts = minibatch['label']
@@ -449,7 +413,6 @@ with Engine(custom_parser=parser) as engine:
                 mask_params = mask_generator.generate_depth_masks(
                     imgs.shape[0], imgs.shape[2:4], imgs[:, 3:, :, :], unsup_imgs_0, unsup_imgs_1)
                 mask_params = torch.from_numpy(mask_params).long()
-
             else:
                 mask_params = unsup_minibatch_0['mask_params']
 
@@ -570,7 +533,8 @@ with Engine(custom_parser=parser) as engine:
             *- Label doesn't need to be permuted from data loader, however either
             '''
 
-            print_str = 'Epoch{}/{}'.format(epoch, config.nepochs) \
+            print_str = 'WEAK LABELS! ' if config.weak_labels else '' \
+                        + 'Epoch{}/{}'.format(epoch, config.nepochs) \
                         + ' Iter{}/{}:'.format(idx + 1, config.niters_per_epoch) \
                         + ' lr=%.2e' % lr \
                         + ' loss_sup=%.2f' % loss_sup.item() \
@@ -602,8 +566,8 @@ with Engine(custom_parser=parser) as engine:
                     #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
                     # wandb.log({"examples": images}
 
-            if step % config.validate_every or (
-                    is_debug and step % config.validate_every % 10) == 0:
+            if step % config.validate_every == 0 or (
+                    is_debug and step % 10 == 0):
                 all_results = []
                 prec_road = []
                 prec_non_road = []
@@ -628,7 +592,13 @@ with Engine(custom_parser=parser) as engine:
                 model.eval()
                 loss_sup_test = 0
                 step_test = 0
+                v3_feats_sample = None
+                v3_labels_sample = None
+                feats_sample = None
+                feats_labels_sample = None
+
                 with torch.no_grad():
+                
                     for batch_test in tqdm(
                             test_loader,
                             desc=f"Epoch: {epoch + 1}/{config.nepochs}. Loop: Validation",
@@ -638,7 +608,76 @@ with Engine(custom_parser=parser) as engine:
 
                         imgs_test = batch_test['data'].to(device)
                         gts_test = batch_test['label'].to(device)
-                        pred_test = model.branch1(imgs_test)
+                        #pred_test = model.branch1(imgs_test)
+                        
+                        #Embedding - only V3+ Feats (Post Concat at Decoder) Being Used
+                        pred_test, _, v3_feats = model.branch1(imgs_test)
+
+                        subset = 2000
+
+                        #project embeddings
+                        if ((step-config.embed_every) % config.embed_every == 0) or (is_debug):
+
+                            if step_test % 10 == 0:
+
+                                _, h, w = gts_test.shape
+                                v3_feats = F.interpolate(
+                                    v3_feats,
+                                    size=(
+                                    h,
+                                    w),
+                                    mode='bilinear',
+                                    align_corners=True)
+
+                                _, d, v_h, v_w = v3_feats.shape
+                                v3_feats = v3_feats[0,...].view(d, -1).permute(1,0)
+                                v3_labels = gts_test[0,...].view(-1).unsqueeze(1)
+
+                                v3_feats_idx = np.arange(v3_labels.shape[0])
+                                v3_feats_idx = np.random.choice(v3_feats_idx, subset, replace=False)
+
+                                # Feats not being used only V3+ Embedded since masking and then passing into model is not acurate
+                                # #generate label mask
+                                # non_road_mask = (gts_test > 0)
+                                # road_mask = ~non_road_mask
+
+                                # #apply mask
+                                # road_only = imgs_test*road_mask.long()
+                                # non_road_only = imgs_test*non_road_mask.long()
+
+                                # #pass through model
+                                # _, road_feats, _ = model(road_only)
+                                # _, non_road_feats, _ = model(non_road_only)
+
+                                # _, d, _, _ = road_feats.shape
+                                # road_feats = road_feats[0,...].view(d, -1).permute(1,0)
+                                # non_road_feats = non_road_feats[0,...].view(d, -1).permute(1,0)
+
+                                # n, _ = road_feats.shape
+                                # #generating labels
+                                # road_labels = torch.zeros((n, 1))
+                                # non_road_labels = torch.ones((n, 1))
+
+                                # #concat feats and labels
+                                # feats_combined = torch.concat((road_feats, non_road_feats), dim=0)
+                                # labels_combined = torch.concat((road_labels, non_road_labels), dim=0)
+
+                                # #random indices generated for embedding
+                                # feats_idx = np.arange(labels_combined.shape[0])
+                                # feats_idx = np.random.choice(feats_idx, subset, replace=False)
+
+                                for x in range(subset):
+                                    if v3_feats_sample == None:
+                                        v3_feats_sample = v3_feats[0,...].unsqueeze(0)
+                                        v3_labels_sample = v3_labels[0,...].unsqueeze(0)
+                                        # feats_sample = feats_combined[0,...].unsqueeze(0)
+                                        # feats_labels_sample = labels_combined[0,...].unsqueeze(0)
+                                    else:
+                                        v3_feats_sample = torch.concat((v3_feats_sample, v3_feats[v3_feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        v3_labels_sample = torch.concat((v3_labels_sample, v3_labels[v3_feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        # feats_sample = torch.concat((feats_sample, feats_combined[feats_idx[x],...].unsqueeze(0)), dim=0)
+                                        # feats_labels_sample = torch.concat((feats_labels_sample, labels_combined[feats_idx[x],...].unsqueeze(0)), dim=0)
+
                         loss_sup_test = loss_sup_test + \
                             criterion(pred_test, gts_test)
                         pred_test_max = torch.argmax(
@@ -662,7 +701,7 @@ with Engine(custom_parser=parser) as engine:
                         all_results.append(results_dict)
 
                         if epoch + 1 > 20:
-                            if step_test % 20 == 0:
+                            if step_test % 50 == 0:
                                 viz_image(
                                     imgs_test,
                                     gts_test,
@@ -694,20 +733,7 @@ with Engine(custom_parser=parser) as engine:
                 mean_IU_last = mean_IU
                 mean_pixel_acc_last = mean_pixel_acc
                 loss_sup_test_last = loss_sup_test
-                #metrics = log_val_results(evaluator)
-                #pa = metrics["pixel accuracy"]
-                #ap = metrics["average precision"]
-                #ar = metrics["average recall"]
-                #miou = metrics["average iou"]
-                #f1 = metrics["F1 Score"]
-                #iou = metrics["IoU"]
-                #loss = metrics["Loss"]
-                #loss_average = loss / len(test_loader)
-                #logger.add_scalar('Val/Pixel_Accuracy', pa, step)
-                #logger.add_scalar('Val/Average_Precision', ap, step)
-                #logger.add_scalar('Val/Average_Recall', ar, step)
-                #logger.add_scalar('Val/mIoU', miou, step)
-                #logger.add_scalar('Val/F1_Score', (f1[0]+f1[1])/len(f1), step)
+
                 print('Supervised Training Validation Set Loss', loss)
                 #print(f"Validation Metrics after {step} steps: \nPixel Accuracy {pa}\nAverage Precision {ap}\nAverage Recall {ar}\nmIoU {miou}\nIoU {iou}\nF1 Score {f1}")
                 _ = print_iou(iu, mean_pixel_acc,
@@ -745,32 +771,74 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
+                if ((step-config.embed_every) % config.embed_every == 0) or (is_debug):
+                    #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
+                    v3_embedder.add_embedding(v3_feats_sample, v3_labels_sample, global_step=step)
+                    print('embedding added at step', step)
+                
+                if mean_IU > best_miou:
+                    best_miou = mean_IU
+                    best_metrics = { 
+                        'miou': mean_IU*100,
+                        'iou_road': iu[0]*100,
+                        'iou_nonroad': iu[1]*100,
+                        'accuracy': round(mean_pixel_acc*100, 2),
+                        'prec_road': round(prec_recall_metrics[0]*100, 2),
+                        'prec_non_road': round(prec_recall_metrics[1]*100, 2),
+                        'recall_road': round(prec_recall_metrics[2]*100, 2),
+                        'recall_non_road': round(prec_recall_metrics[3]*100, 2),
+                        'mean_prec': round(prec_recall_metrics[4]*100, 2),
+                        'mean_recall': round(prec_recall_metrics[5]*100, 2),
+                        'f1_score': round(f1_score, 2)
+                    }
+
                 model.train()
 
             pbar.set_description(print_str, refresh=False)
 
             end_time = time.time()
 
+    hparams_dict = {
+        'bn_eps': config.bn_eps,
+        'bn_momentum': config.bn_momentum,
+        'cps_weight': config.cps_weight,
+        'contrast_weight': config.contrast_weight,
+        'sup_contrast_weight': config.sup_contrast_weight,
+        'labeled_ratio': config.labeled_ratio,
+        'batch_size': config.batch_size,
+        'optimiser': str(config.optimiser),
+        'lr_power': config.lr_power,
+        'fig.adam': str(config.adam_betas),
+        'momentum': config.momentum,
+        'fig.opti': str(config.optim_params),
+        'weight_d': config.weight_decay,
+        'attn_lr_': config.attn_lr_factor,
+        'head_lr_': config.head_lr_factor,
+        'attn_hea': config.attn_heads,
+        'batch_si': config.batch_size,
+        'lr': config.lr,
+        'image_height': config.image_height,
+        'image_width': config.image_width,
+        'dimage_mean': config.dimage_mean,
+        'dimage_std': config.dimage_std,
+        'num_classes': config.num_classes
+    }
+
+    logger.add_hparams(hparams_dict, best_metrics)
+
         # if engine.distributed and (engine.local_rank == 0):
         #logger.add_scalar('train_loss_sup', sum_loss_sup / len(pbar), epoch)
         #logger.add_scalar('train_loss_sup_r', sum_loss_sup_r / len(pbar), epoch)
         #logger.add_scalar('train_loss_cps', sum_cps / len(pbar), epoch)
 
-        '''
-        if azure and engine.local_rank == 0:
-            run.log(name='Supervised Training Loss', value=sum_loss_sup / len(pbar))
-            run.log(name='Supervised Training Loss right', value=sum_loss_sup_r / len(pbar))
-            run.log(name='Supervised Training Loss CPS', value=sum_cps / len(pbar))
-        '''
-
         # if '''(epoch > config.nepochs // 6) and''' (epoch %
         # config.snapshot_iter == 0) or (epoch == config.nepochs - 1):
 
-        if engine.distributed and (engine.local_rank == 0):
-            engine.save_and_link_checkpoint(config.snapshot_dir,
+    if engine.distributed and (engine.local_rank == 0):
+        engine.save_and_link_checkpoint(config.snapshot_dir,
                                             config.log_dir,
-                                            config.log_dir_link, epoch)
-        elif not engine.distributed:
-            engine.save_and_link_checkpoint(config.snapshot_dir,
+                                            None, epoch)
+    elif not engine.distributed:
+        engine.save_and_link_checkpoint(config.snapshot_dir,
                                             config.log_dir,
-                                            config.log_dir_link, epoch)
+                                            None, epoch)

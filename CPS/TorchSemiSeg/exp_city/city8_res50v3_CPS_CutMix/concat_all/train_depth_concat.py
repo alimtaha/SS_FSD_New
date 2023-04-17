@@ -1,10 +1,12 @@
 from __future__ import division
+import os.path as osp
 import sys
-sys.path.append('../../../')
-sys.path.append('../')
+import os
+sys.path.append(os.getcwd() + '/../../..')
+sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
 import mask_gen_depth
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from matplotlib import pyplot as plt
 from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision
 from furnace.engine.evaluator import Evaluator
@@ -41,7 +43,6 @@ import uuid
 import os
 import os.path as osp
 
-
 """
 import ignite.engine as i_engine
 from ignite.handlers import *
@@ -57,8 +58,12 @@ from ignite.contrib.metrics import *
 #from furnace.seg_opr.sync_bn import DataParallelModel, Reduce, BatchNorm2d
 
 PROJECT = 'CPS'
-experiment_name = str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
-    '_L' + str(config.lr) + '_ConcatD_' + str(config.image_height) + 'size'
+if config.weak_labels:
+    experiment_name = 'weak_labels' + '_ConcatD' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
+else:
+    experiment_name = '_ConcatD' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
 
 
 '''
@@ -76,7 +81,7 @@ except:
     azure = False
 '''
 if os.getenv('debug') is not None:
-    is_debug = os.environ['debug']
+    is_debug = bool(os.environ['debug'])
 else:
     is_debug = False
 
@@ -180,16 +185,11 @@ else:
 # + '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
 tb_dir = config.tb_dir
 logger = SummaryWriter(
-    log_dir=tb_dir +
-    '/' +
-    experiment_name +
-    '_' +
-    time.strftime(
-        "%b%d_%d-%H-%M",
-        time.localtime()),
-    comment=experiment_name)
-
+    log_dir= config.tb_dir,
+    comment=experiment_name
+    )
 parser = argparse.ArgumentParser()
+os.environ['MASTER_PORT'] = '169711'
 
 with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
@@ -211,9 +211,9 @@ with Engine(custom_parser=parser) as engine:
     unsupervised_train_loader_1, unsupervised_train_sampler_1 = get_train_loader(
         engine, CityScape, train_source=config.unsup_source_1, unsupervised=True, collate_fn=collate_fn)
 
-    if engine.local_rank == 0:
-        generate_tb_dir = config.tb_dir + '/tb'
-        engine.link_tb(tb_dir, generate_tb_dir)
+    # if engine.local_rank == 0:
+    #     generate_tb_dir = config.tb_dir + '/tb'
+    #     engine.link_tb(tb_dir, generate_tb_dir)
 
     #experiment_name = "Road_Only"
     #run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{config.batch_size}-tep{config.nepochs}-lr{config.lr}-wd{config.weight_decay}-{uuid.uuid4()}"
@@ -253,11 +253,7 @@ with Engine(custom_parser=parser) as engine:
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
 
-    trainval_pre = TrainValPre(
-        config.image_mean,
-        config.image_std,
-        config.dimage_mean,
-        config.dimage_std)
+    trainval_pre = TrainValPre(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
 
     test_loader = data.DataLoader(test_dataset,
@@ -340,44 +336,45 @@ with Engine(custom_parser=parser) as engine:
 
     print("Number of Params", count_params(model))
 
-    def val_step(engine, batch):
-        model.eval()
-        loss_sup_test = 0
-        with torch.no_grad():  # Testing
-            imgs_test = batch['data'].to(device)
-            gts_test = batch['label'].to(device)
-            pred_test = model.branch1(imgs_test)
-            loss_sup_test = loss_sup_test + criterion(pred_test, gts_test)
-        return gts_test, gts_test
+    # def val_step(engine, batch):
+    #     model.eval()
+    #     loss_sup_test = 0
+    #     with torch.no_grad():
+    #         imgs_test = batch['data'].to(device)
+    #         gts_test = batch['label'].to(device)
+    #         pred_test = model.branch1(imgs_test)
+    #         loss_sup_test = loss_sup_test + criterion(pred_test, gts_test)
+    #     return gts_test, gts_test
 
-    """
-    evaluator = i_engine.Engine(val_step)
-    cm = ConfusionMatrix(num_classes=2)
+    
+    # evaluator = i_engine.Engine(val_step)
+    # cm = ConfusionMatrix(num_classes=2)
 
-    val_metrics = {
-    "pixel accuracy": Accuracy(),
-    "average precision": Precision(average=True),
-    "average recall": Recall(average=True),
-    "IoU": IoU(cm),
-    "average iou": mIoU(cm),
-    "F1 Score": DiceCoefficient(cm), #ignore index needs to be changed to 2 and set for all iou losses and F1
-    "Loss": Loss(criterion)
-    }
+    # val_metrics = {
+    # "pixel accuracy": Accuracy(),
+    # "average precision": Precision(average=True),
+    # "average recall": Recall(average=True),
+    # "IoU": IoU(cm),
+    # "average iou": mIoU(cm),
+    # "F1 Score": DiceCoefficient(cm), #ignore index needs to be changed to 2 and set for all iou losses and F1
+    # "Loss": Loss(criterion)
+    # }
 
-    for name, metric in val_metrics.items():
-        metric.attach(evaluator, name)
+    # for name, metric in val_metrics.items():
+    #     metric.attach(evaluator, name)
 
 
-    def log_val_results(evaluator):
-        state = evaluator.run(test_loader)
-        return state.metrics
+    # def log_val_results(evaluator):
+    #     state = evaluator.run(test_loader)
+    #     return state.metrics
 
-    """
+    
 
     #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
 
     is_debug = False
     step = 0
+    best_miou = 0
     iu_last = 0
     mean_IU_last = 0
     mean_pixel_acc_last = 0
@@ -444,9 +441,9 @@ with Engine(custom_parser=parser) as engine:
             engine.update_iteration(epoch, idx)
             start_time = time.time()
 
-            minibatch = dataloader.next()
-            unsup_minibatch_0 = unsupervised_dataloader_0.next()
-            unsup_minibatch_1 = unsupervised_dataloader_1.next()
+            minibatch = next(dataloader)
+            unsup_minibatch_0 = next(unsupervised_dataloader_0)
+            unsup_minibatch_1 = next(unsupervised_dataloader_1)
 
             imgs = minibatch['data']
             gts = minibatch['label']
@@ -457,7 +454,6 @@ with Engine(custom_parser=parser) as engine:
                 mask_params = mask_generator.generate_depth_masks(
                     imgs.shape[0], imgs.shape[2:4], imgs[:, 3:, :, :], unsup_imgs_0, unsup_imgs_1)
                 mask_params = torch.from_numpy(mask_params).long()
-
             else:
                 mask_params = unsup_minibatch_0['mask_params']
 
@@ -540,11 +536,11 @@ with Engine(custom_parser=parser) as engine:
 
             loss_sup = criterion(sup_pred_l, gts)
             #dist.all_reduce(loss_sup, dist.ReduceOp.SUM)
-            loss_sup = loss_sup / engine.world_size
+            loss_sup = loss_sup
 
             loss_sup_r = criterion(sup_pred_r, gts)
             #dist.all_reduce(loss_sup_r, dist.ReduceOp.SUM)
-            loss_sup_r = loss_sup_r / engine.world_size
+            loss_sup_r = loss_sup_r
             current_idx = epoch * config.niters_per_epoch + idx
             lr = lr_policy.get_lr(current_idx)
 
@@ -578,7 +574,8 @@ with Engine(custom_parser=parser) as engine:
             *- Label doesn't need to be permuted from data loader, however either
             '''
 
-            print_str = 'Epoch{}/{}'.format(epoch, config.nepochs) \
+            print_str = 'WEAK LABELS! ' if config.weak_labels else '' \
+                        + 'Epoch{}/{}'.format(epoch, config.nepochs) \
                         + ' Iter{}/{}:'.format(idx + 1, config.niters_per_epoch) \
                         + ' lr=%.2e' % lr \
                         + ' loss_sup=%.2f' % loss_sup.item() \
@@ -590,10 +587,6 @@ with Engine(custom_parser=parser) as engine:
             sum_cps += cps_loss.item()
 
             if engine.local_rank == 0 and step % 20 == 0:
-                #wandb.log({f"Train/Loss_Sup_R": loss_sup_r}, step=step)
-                #wandb.log({f"Train/Loss_Sup_L": loss_sup}, step=step)
-                #wandb.log({f"Train/Loss_CPS": cps_loss}, step=step)
-                #wandb.log({f"Train/Total Loss": loss}, step=step)
                 logger.add_scalar('train_loss_sup', loss_sup, step)
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
@@ -607,11 +600,9 @@ with Engine(custom_parser=parser) as engine:
                         epoch,
                         minibatch['fn'][0],
                         None)
-                    #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
-                    # wandb.log({"examples": images}
 
             if step % config.validate_every == 0 or (
-                    is_debug and step % config.validate_every % 10 == 0):
+                    is_debug and step % 10 == 0):
                 all_results = []
                 prec_road = []
                 prec_non_road = []
@@ -670,7 +661,7 @@ with Engine(custom_parser=parser) as engine:
                         all_results.append(results_dict)
 
                         if epoch + 1 > 20:
-                            if step_test % 20 == 0:
+                            if step_test % 50 == 0:
                                 viz_image(
                                     imgs_test,
                                     gts_test,
@@ -753,32 +744,75 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
+                if mean_IU > best_miou:
+                    best_miou = mean_IU
+                    best_metrics = { 
+                        'miou': mean_IU*100,
+                        'iou_road': iu[0]*100,
+                        'iou_nonroad': iu[1]*100,
+                        'accuracy': round(mean_pixel_acc*100, 2),
+                        'prec_road': round(prec_recall_metrics[0]*100, 2),
+                        'prec_non_road': round(prec_recall_metrics[1]*100, 2),
+                        'recall_road': round(prec_recall_metrics[2]*100, 2),
+                        'recall_non_road': round(prec_recall_metrics[3]*100, 2),
+                        'mean_prec': round(prec_recall_metrics[4]*100, 2),
+                        'mean_recall': round(prec_recall_metrics[5]*100, 2),
+                        'f1_score': round(f1_score, 2)
+                    }
+
                 model.train()
 
             pbar.set_description(print_str, refresh=False)
 
             end_time = time.time()
 
+    hparams_dict = {
+        'bn_eps': config.bn_eps,
+        'bn_momentum': config.bn_momentum,
+        'cps_weight': config.cps_weight,
+        'contrast_weight': config.contrast_weight,
+        'sup_contrast_weight': config.sup_contrast_weight,
+        'labeled_ratio': config.labeled_ratio,
+        'batch_size': config.batch_size,
+        'optimiser': str(config.optimiser),
+        'lr_power': config.lr_power,
+        'fig.adam': str(config.adam_betas),
+        'momentum': config.momentum,
+        'fig.opti': str(config.optim_params),
+        'weight_d': config.weight_decay,
+        'attn_lr_': config.attn_lr_factor,
+        'head_lr_': config.head_lr_factor,
+        'attn_hea': config.attn_heads,
+        'batch_si': config.batch_size,
+        'lr': config.lr,
+        'image_height': config.image_height,
+        'image_width': config.image_width,
+        'dimage_mean': config.dimage_mean,
+        'dimage_std': config.dimage_std,
+        'num_classes': config.num_classes
+    }
+
+    logger.add_hparams(hparams_dict, best_metrics)
         # if engine.distributed and (engine.local_rank == 0):
         #logger.add_scalar('train_loss_sup', sum_loss_sup / len(pbar), epoch)
         #logger.add_scalar('train_loss_sup_r', sum_loss_sup_r / len(pbar), epoch)
         #logger.add_scalar('train_loss_cps', sum_cps / len(pbar), epoch)
 
-        '''
+    '''
         if azure and engine.local_rank == 0:
             run.log(name='Supervised Training Loss', value=sum_loss_sup / len(pbar))
             run.log(name='Supervised Training Loss right', value=sum_loss_sup_r / len(pbar))
             run.log(name='Supervised Training Loss CPS', value=sum_cps / len(pbar))
-        '''
+    '''
 
         # if '''(epoch > config.nepochs // 6) and''' (epoch %
         # config.snapshot_iter == 0) or (epoch == config.nepochs - 1):
 
-        if engine.distributed and (engine.local_rank == 0):
-            engine.save_and_link_checkpoint(config.snapshot_dir,
+    if engine.distributed and (engine.local_rank == 0):
+        engine.save_and_link_checkpoint(config.snapshot_dir,
                                             config.log_dir,
-                                            config.log_dir_link, epoch)
-        elif not engine.distributed:
-            engine.save_and_link_checkpoint(config.snapshot_dir,
+                                            None, epoch)
+    elif not engine.distributed:
+        engine.save_and_link_checkpoint(config.snapshot_dir,
                                             config.log_dir,
-                                            config.log_dir_link, epoch)
+                                            None, epoch)
