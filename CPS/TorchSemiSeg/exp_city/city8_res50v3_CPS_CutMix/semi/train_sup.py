@@ -65,7 +65,7 @@ except:
     azure = False
 '''
 if os.getenv('debug') is not None:
-    is_debug = bool(os.environ['debug'])
+    is_debug = True if str(os.environ['debug']) == 'True' else False
 else:
     is_debug = False
 

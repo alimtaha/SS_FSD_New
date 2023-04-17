@@ -10,7 +10,7 @@ export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
 export mode="Concat-Semi-Supervision"
-export debug="True"
+export debug="False"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'
