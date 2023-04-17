@@ -263,6 +263,7 @@ with Engine(custom_parser=parser) as engine:
 
     # config lr policy
     total_iteration = config.nepochs * config.fully_sup_iters
+    print(total_iteration)
     lr_policy = WarmUpPolyLR(
         base_lr,
         config.lr_power,
@@ -381,7 +382,7 @@ with Engine(custom_parser=parser) as engine:
             #dist.all_reduce(loss_sup, dist.ReduceOp.SUM)
             loss_sup = loss_sup / engine.world_size
 
-            current_idx = epoch * config.niters_per_epoch + idx
+            current_idx = epoch * config.fully_sup_iters + idx
             lr = lr_policy.get_lr(current_idx)
 
             optimizer_l.param_groups[0]['lr'] = lr

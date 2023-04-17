@@ -31,7 +31,7 @@ class WarmUpPolyLR(BaseLR):
         self.start_lr = start_lr
         self.lr_power = lr_power
         self.total_iters = total_iters + 0.0
-        self.warmup_steps = warmup_steps
+        self.warmup_steps = warmup_steps      
 
     def get_lr(self, cur_iter):
         if cur_iter < self.warmup_steps:

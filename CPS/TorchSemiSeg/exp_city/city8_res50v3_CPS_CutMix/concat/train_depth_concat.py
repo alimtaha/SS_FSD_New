@@ -522,10 +522,6 @@ with Engine(custom_parser=parser) as engine:
             sum_cps += cps_loss.item()
 
             if engine.local_rank == 0 and step % 20 == 0:
-                #wandb.log({f"Train/Loss_Sup_R": loss_sup_r}, step=step)
-                #wandb.log({f"Train/Loss_Sup_L": loss_sup}, step=step)
-                #wandb.log({f"Train/Loss_CPS": cps_loss}, step=step)
-                #wandb.log({f"Train/Total Loss": loss}, step=step)
                 logger.add_scalar('train_loss_sup', loss_sup, step)
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
@@ -539,8 +535,6 @@ with Engine(custom_parser=parser) as engine:
                         epoch,
                         minibatch['fn'][0],
                         None)
-                    #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
-                    # wandb.log({"examples": images}
 
             if step % config.validate_every == 0 or (
                     is_debug and step % 10 == 0):
@@ -591,7 +585,7 @@ with Engine(custom_parser=parser) as engine:
                         subset = 2000
 
                         #project embeddings
-                        if (step-config.embed_every) % config.embed_every == 0:
+                        if (step-config.embed_every) % config.embed_every == 0 or is_debug:
 
                             if step_test % 10 == 0:
 
@@ -746,10 +740,11 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
-                if (step-config.embed_every) % config.embed_every == 0:
+                if (step-config.embed_every) % config.embed_every == 0 or is_debug:
                     #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
                     v3_embedder.add_embedding(v3_feats_sample, v3_labels_sample, global_step=step)
                     print('embedding added at step', step)
+                    del v3_feats_sample, v3_labels_sample, v3_feats, v3_labels
 
                 if mean_IU > best_miou:
                     best_miou = mean_IU
@@ -767,7 +762,13 @@ with Engine(custom_parser=parser) as engine:
                         'f1_score': round(f1_score, 2)
                     }
 
+                #The following lines clear the embeddings from the GPU which causes out of memory error (copy model to CPU and back forces clear)
+                model.cpu()
+                torch.cuda.empty_cache()
+                model.to(device)
+
                 model.train()
+                torch.cuda.empty_cache()
 
             pbar.set_description(print_str, refresh=False)
 
