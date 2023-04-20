@@ -94,8 +94,8 @@ C.image_mean = np.array([0.485, 0.456, 0.406])  # 0.485, 0.456, 0.406
 C.image_std = np.array([0.229, 0.224, 0.225])
 C.dimage_mean = 29.091  #Generated using full train & val & test sets on NewCRFs 256 Depth Maps
 C.dimage_std = 31.799
-C.image_height = 600
-C.image_width = 600
+C.image_height = 720
+C.image_width = 720
 # if ratio is 8, becomes 371 (// returns the int of the division)
 C.num_train_imgs = 2975 // C.labeled_ratio
 C.num_eval_imgs = 500
@@ -125,7 +125,7 @@ C.lr_power = 0.9
 C.adam_betas = (0.9, 0.98)
 C.momentum = 0.8
 C.optim_params = C.momentum if C.optimiser == 'SGD' else C.adam_betas
-C.weight_decay = 0.001 #1e-4
+C.weight_decay = 0.0001 #1e-4
 C.attn_lr_factor = 8
 C.head_lr_factor = 2
 C.attn_heads = 4
@@ -177,7 +177,11 @@ C.embed_every = C.validate_every*4
 #modes are depth_concat, contrastive_depth_concat, crossattention_depth_concat - more to be added (semi-super, fully-super, depth-append)
 C.mode = os.environ['mode'] + '_Ratio' + os.environ['ratio']         
 
-run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}"
+C.depth_ckpt = 'newcrfs_80.0_model-44982-best_d1_0.95066/'
+C.max_d = 80 if C.depth_ckpt == 'newcrfs_80.0_model-44982-best_d1_0.95066/' else 256
+
+
+run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}-maxdepth{C.max_d}_{C.depth_ckpt.split('_')[0]}"
 name = f"{C.mode}_{run_id}"
 
 C.log_dir = os.path.join(os.environ['snapshot_dir'], name)
@@ -211,8 +215,6 @@ else:
 # else:
 
 C.snapshot_dir = osp.abspath(osp.join(C.log_dir, "snapshot"))
-C.depth_ckpt = 'newcrfs_256.0_model-89964-best_silog_14.55338/'
-
 
 exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
 C.log_file = C.log_dir + '/log_' + exp_time + '.log'

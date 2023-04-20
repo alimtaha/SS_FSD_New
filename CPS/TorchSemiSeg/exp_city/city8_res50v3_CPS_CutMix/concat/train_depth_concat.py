@@ -797,7 +797,9 @@ with Engine(custom_parser=parser) as engine:
         'image_width': config.image_width,
         'dimage_mean': config.dimage_mean,
         'dimage_std': config.dimage_std,
-        'num_classes': config.num_classes
+        'num_classes': config.num_classes,
+        'max_depth': config.max_d,
+        'depth_dataset': config.depth_ckpt
     }
 
     logger.add_hparams(hparams_dict, best_metrics)
