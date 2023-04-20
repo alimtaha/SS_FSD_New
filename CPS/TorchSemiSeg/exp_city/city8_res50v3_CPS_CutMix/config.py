@@ -92,10 +92,12 @@ C.num_classes = 2                              # need to change for training fre
 C.background = 100  # background changed to the class for the padding when cropping
 C.image_mean = np.array([0.485, 0.456, 0.406])  # 0.485, 0.456, 0.406
 C.image_std = np.array([0.229, 0.224, 0.225])
-C.dimage_mean = 29.091  #Generated using full train & val & test sets on NewCRFs 256 Depth Maps
-C.dimage_std = 31.799
-C.image_height = 720
-C.image_width = 720
+C.dimage_mean = 24.188  #Generated using full train & val & test sets on NewCRFs 80 Depth Maps
+C.dimage_std = 19.530
+# C.dimage_mean = 29.091  #Generated using full train & val & test sets on NewCRFs 80 Depth Maps
+# C.dimage_std = 31.799
+C.image_height = 620
+C.image_width = 620
 # if ratio is 8, becomes 371 (// returns the int of the division)
 C.num_train_imgs = 2975 // C.labeled_ratio
 C.num_eval_imgs = 500
