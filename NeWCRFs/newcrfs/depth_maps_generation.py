@@ -7,10 +7,12 @@ import sys
 import argparse
 import numpy as np
 from tqdm import tqdm
+import cv2
 
-from utils import post_process_depth, flip_lr, compute_errors, compute_errors_all
+from utils import post_process_depth, post_process_features, flip_lr, compute_errors, compute_errors_all
 from networks.NewCRFDepth import NewCRFDepth
 
+feat_names = ['PPM', 'E3', 'E2', 'E1']
 
 def convert_arg_line_to_args(arg_line):
     for arg in arg_line.split():
@@ -143,7 +145,8 @@ def main_worker(args):
         version=args.encoder,
         inv_depth=False,
         max_depth=args.max_depth,
-        pretrained=None)
+        pretrained=None,
+        mode='features')
     
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print("== Total number of parameters: {}".format(num_params))
@@ -157,9 +160,13 @@ def main_worker(args):
 
 
     save_path = os.path.join(args.save_path, 'newcrfs_' + str(args.max_depth) + '_' + args.checkpoint_path.split('/')[-1])
-    
+    embeddings_save_path = os.path.join(save_path, 'embeddings')
+
     if os.path.isdir(save_path) is False:
         os.mkdir(save_path)
+    
+    if os.path.isdir(embeddings_save_path) is False:
+        os.mkdir(embeddings_save_path)
 
     print("== Model Initialized")
 
@@ -185,18 +192,33 @@ def main_worker(args):
     with torch.no_grad():
         for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
                 image = eval_sample_batched['image'].cuda()
-                pred_depth = model(image)
+                pred_depth, features = model(image)
                 image_flipped = flip_lr(image)
-                pred_depth_flipped = model(image_flipped)
-                pred_depth = post_process_depth(pred_depth, pred_depth_flipped)
+                pred_depth_flipped, features_flipped = model(image_flipped)
+                # pred_depth = post_process_depth(pred_depth, pred_depth_flipped)
+                # pred_depth = pred_depth.cpu().numpy().squeeze()
+                
+                for idx, feats in enumerate(features):
+                    feats_flipped = features_flipped[idx]
+                    feats = post_process_features(feats, feats_flipped)
+                    feats = feats.cpu().numpy().squeeze()
+                    save_path_file = os.path.join(embeddings_save_path, eval_sample_batched['filename'][0].replace('.jpg', '_') + feat_names[idx] + '.pt')
+                    torch.save(feats, save_path_file)
 
-                pred_depth = pred_depth.cpu().numpy().squeeze()
+                # pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
+                # pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
+                # pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
+                # pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
 
-                pred_depth[pred_depth < args.min_depth_eval] = args.min_depth_eval
-                pred_depth[pred_depth > args.max_depth_eval] = args.max_depth_eval
-                pred_depth[np.isinf(pred_depth)] = args.max_depth_eval
-                pred_depth[np.isnan(pred_depth)] = args.min_depth_eval
-    
+                # save_feats_only = True
+                # if save_feats_only:
+                #     pass
+                # else:
+                #     save_path_file = os.path.join(save_path, eval_sample_batched['filename'][0].replace('jpg', 'png'))
+                #     pred_d_numpy = pred_depth * 256.0
+                #     cv2.imwrite(save_path_file, pred_d_numpy.astype(
+                #             np.uint16), [
+                #             cv2.IMWRITE_PNG_COMPRESSION, 0])
 def main():
     torch.cuda.empty_cache()
     args.distributed = False

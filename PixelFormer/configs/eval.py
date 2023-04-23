@@ -74,10 +74,6 @@ def eval(model, dataloader_eval, post_process=False):
     
     result_metrics = {}
 
-    for mask in masks:
-        result_metrics[mask] = {}
-        for metric in metric_name:
-            result_metrics[mask][metric] = 0.0
     for _, eval_sample_batched in enumerate(tqdm(dataloader_eval.data)):
         with torch.no_grad():
             image = eval_sample_batched['image'].cuda()
@@ -100,7 +96,7 @@ def eval(model, dataloader_eval, post_process=False):
             gt_depth = gt_depth.cpu().numpy().squeeze()
             if args.road_mask:
                 road_mask = road_mask.cpu().numpy().squeeze()
-
+                
         if args.do_kb_crop:
             height, width = gt_depth.shape
             top_margin = int(height - 352)
@@ -173,6 +169,8 @@ def eval(model, dataloader_eval, post_process=False):
 def main_worker(args):
 
     model = PixelFormer(version=args.encoder, inv_depth=False, max_depth=args.max_depth, pretrained=None)
+    model.train()
+
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print("== Total number of parameters: {}".format(num_params))
 
@@ -198,17 +196,12 @@ def main_worker(args):
 
     dataloader_eval = NewDataLoader(args, 'online_eval')
 
-    if args.road_mask:
-        str_modifier = 'withroadmasks_'
-    else:
-        str_modifier = ''    
-
     args.model_name = (
-        'Eval_' + str_modifier +
+        'Eval_' +
         str(datetime.now().strftime('%m%d_%H%M')) 
-        +  '_maxdepth:' + str(args.max_depth_eval)
-        + '_roadmasks:' + str(args.road_mask)
-        +  '_modelckpt: ' + args.checkpoint_path.split('/')[-1]
+        +  'maxdepth:' + str(args.max_depth_eval)
+        + 'road_masks:' + str(args.road_mask)
+        +  'model_ckpt: ' + args.checkpoint_path.split('/')[-1]
     )
     
     tb_dir = args.log_directory + '/' + args.model_name + '/summaries'

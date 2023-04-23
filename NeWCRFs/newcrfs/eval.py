@@ -61,6 +61,7 @@ parser.add_argument(
 parser.add_argument('--semantic_labels_dataset',
     type=str,   
     help='semantic labels to be used for evaluation on road masks only', default='')
+parser.add_argument('--disparity',                             help='if set, use disparity instead of depth maps', action='store_true')
 
 
 # Preprocessing
@@ -119,6 +120,8 @@ parser.add_argument(
 parser.add_argument('--road_mask',
     help='if set, only uses road masks for evaluation', 
     action='store_true')
+parser.add_argument('--log_directory',             type=str,   help='directory to save checkpoints and summaries', default='')
+
 
 
 
@@ -167,7 +170,8 @@ def eval(model, dataloader_eval, post_process=False):
 
             pred_depth = pred_depth.cpu().numpy().squeeze()
             gt_depth = gt_depth.cpu().numpy().squeeze()
-            road_mask = road_mask.cpu().numpy().squeeze()
+            if args.road_mask:
+                road_mask = road_mask.cpu().numpy().squeeze()
 
         if args.do_kb_crop:
             height, width = gt_depth.shape
@@ -258,8 +262,7 @@ def main_worker(args):
         inv_depth=False,
         max_depth=args.max_depth,
         pretrained=None)
-    model.train()
-
+    
     num_params = sum([np.prod(p.size()) for p in model.parameters()])
     print("== Total number of parameters: {}".format(num_params))
 
@@ -288,10 +291,17 @@ def main_worker(args):
 
     dataloader_eval = NewDataLoader(args, 'online_eval')
 
+    if args.road_mask:
+        str_modifier = 'withroadmasks_'
+    else:
+        str_modifier = ''    
+
     args.model_name = (
+        'Eval_' + str_modifier +
         str(datetime.now().strftime('%m%d_%H%M')) 
-        +  'maxdepth:' + str(args.max_depth_eval)
-        + 'road_masks:' + str(args.road_mask)
+        +  '_maxdepth:' + str(args.max_depth_eval)
+        + '_roadmasks:' + str(args.road_mask)
+        +  '_modelckpt: ' + args.checkpoint_path.split('/')[-1]
     )
     
     tb_dir = args.log_directory + '/' + args.model_name + '/summaries'

@@ -14,12 +14,13 @@ class NewCRFDepth(nn.Module):
     """
 
     def __init__(self, version=None, inv_depth=False, pretrained=None,
-                 frozen_stages=-1, min_depth=0.1, max_depth=100.0, **kwargs):
+                 frozen_stages=-1, min_depth=0.1, max_depth=100.0, mode=None, **kwargs):
         super().__init__()
 
         self.inv_depth = inv_depth
         self.with_auxiliary_head = False
         self.with_neck = False
+        self.mode = mode
 
         norm_cfg = dict(type='BN', requires_grad=True)
         # norm_cfg = dict(type='GN', requires_grad=True, num_groups=8)
@@ -151,6 +152,8 @@ class NewCRFDepth(nn.Module):
 
         ppm_out = self.decoder(feats)
 
+        print('ppm global features', ppm_out.shape)
+
         e3 = self.crf3(feats[3], ppm_out)
         e3 = nn.PixelShuffle(2)(e3)
         e2 = self.crf2(feats[2], e3)
@@ -159,6 +162,10 @@ class NewCRFDepth(nn.Module):
         e1 = nn.PixelShuffle(2)(e1)
         e0 = self.crf0(feats[0], e1)
 
+        print('Top most (e3) embedding size', e3.shape)
+        print('e2 embedding size', e2.shape)
+        print('e1 embedding size', e1.shape)
+
         if self.up_mode == 'mask':
             mask = self.mask_head(e0)
             d1 = self.disp_head1(e0, 1)
@@ -166,9 +173,14 @@ class NewCRFDepth(nn.Module):
         else:
             d1 = self.disp_head1(e0, 4)
 
+        #upscaled here
         depth = d1 * self.max_depth
 
-        return depth
+        if self.mode == 'features':
+            return depth, (ppm_out, e3, e2, e1)
+        else:
+            return depth
+        
 
 
 class DispHead(nn.Module):

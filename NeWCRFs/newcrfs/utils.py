@@ -247,8 +247,37 @@ def post_process_depth(depth, depth_flipped, method='mean'):
                         dtype=depth.dtype).repeat(B, C, H, 1)
     mask = 1.0 - torch.clamp(20. * (xs - 0.05), 0., 1.)
     mask_hat = flip_lr(mask)
+
     return mask_hat * depth + mask * inv_depth_hat + \
         (1.0 - mask - mask_hat) * inv_depth_fused
+
+def post_process_features(feats, feats_flipped, method='mean'):
+    """
+    Post-process an inverse and flipped inverse feature map
+
+    Parameters
+    ----------
+    inv_feat : torch.Tensor [B,1,H,W]
+        Inverse feature map
+    inv_feat_flipped : torch.Tensor [B,1,H,W]
+        Inverse feature map produced from a flipped image
+    method : str
+        Method that will be used to fuse the inverse feature maps
+
+    Returns
+    -------
+    inv_feat_pp : torch.Tensor [B,1,H,W]
+        Post-processed inverse feature map
+    """
+    B, C, H, W = feats.shape
+    inv_feats_hat = flip_lr(feats_flipped)
+    inv_feats_fused = fuse_inv_depth(feats, inv_feats_hat, method=method)
+    feats_xs = torch.linspace(0., 1., W, device=feats.device,
+                        dtype=feats.dtype).repeat(B, C, H, 1)
+    feats_mask = 1.0 - torch.clamp(20. * (feats_xs - 0.05), 0., 1.)
+    feats_mask_hat = flip_lr(feats_mask)
+    return feats_mask_hat * feats + feats_mask * inv_feats_hat + \
+        (1.0 - feats_mask - feats_mask_hat) * inv_feats_fused
 
 
 class DistributedSamplerNoEvenlyDivisible(Sampler):

@@ -22,6 +22,8 @@ for pic in pics:
 
     root_path = '/mnt/Dataset/city/depth_gen/'
 
+    root_path = '/home/extraspace/Datasets/Datasets/cityscapes/city/depth_gen/'
+
     path_names = {
         'n256': f'newcrfs_256.0_model-89964-best_silog_14.55338/{pic}.png',
         'n80': f'newcrfs_80.0_model-44982-best_d1_0.95066/{pic}.png',
@@ -30,8 +32,8 @@ for pic in pics:
     }
 
     city = pic.split('_')[0]
-    gt256 = Image.open(f'/mnt/Dataset/depth/multi_new_depth_inf/val/{city}/{pic}.png')
-    #gt80 = Image.open(f'/mnt/Dataset/city/depth/depth_80/val/{city}/{pic}.png')
+    gt256 = Image.open(f'/home/extraspace/Datasets/Datasets/cityscapes/depth/multi_new_depth_inf/val/{city}/{pic}.png')
+    #gt80 = Image.open(f'/home/extraspace/Datasets/Datasets/cityscapes/depth/depth_80/val/{city}/{pic}.png')
 
 
     fig = plt.figure(figsize=(20, 15))
