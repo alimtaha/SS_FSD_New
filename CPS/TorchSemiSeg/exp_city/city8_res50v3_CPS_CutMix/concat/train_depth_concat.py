@@ -585,7 +585,7 @@ with Engine(custom_parser=parser) as engine:
                         subset = 2000
 
                         #project embeddings
-                        if (step-config.embed_every) % config.embed_every == 0 or is_debug:
+                        if False: #(step-config.embed_every) % config.embed_every == 0 or is_debug:
 
                             if step_test % 10 == 0:
 

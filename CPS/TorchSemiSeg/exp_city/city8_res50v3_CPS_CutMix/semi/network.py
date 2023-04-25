@@ -1,21 +1,19 @@
 # encoding: utf-8
 
 from furnace.seg_opr.loss_opr import SigmoidFocalLoss, ProbOhemCrossEntropy2d, bce2d
-from furnace.engine.engine import Engine
-from furnace.engine.lr_policy import WarmUpPolyLR
-from furnace.utils.init_func import init_weight, group_weight
-from dataloader import get_train_loader, CityScape
 from furnace.base_model import resnet50
-from collections import OrderedDict
 from functools import partial
 from config import config
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
 import sys
+import os
 import path
 
-sys.path.append('../../../')
+sys.path.append(os.getcwd() + '../../../')
+sys.path.append(os.getcwd() + '../../')
+sys.path.append(os.getcwd() + '../')
 
 
 #from furnace.seg_opr.sync_bn import DataParallelModel, Reduce, BatchNorm2d

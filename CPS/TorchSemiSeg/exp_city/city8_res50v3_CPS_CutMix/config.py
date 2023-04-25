@@ -131,6 +131,7 @@ C.weight_decay = 0.0001 #1e-4
 C.attn_lr_factor = 8
 C.head_lr_factor = 2
 C.attn_heads = 4
+C.checkpoint_path = '/mnt/Dataset/Logs/SSL/CPS/Semi/Semi-Supervision_Ratio16_22-Apr_21-23-nodebs2-tep35-lr0.002-maxdepth80_newcrfs/epoch-best_loss.pth'
 
 # 35 #122.8 epochs to equal number of iterations for supervised baseline.
 # original - 137
@@ -184,7 +185,7 @@ C.max_d = 80 if C.depth_ckpt == 'newcrfs_80.0_model-44982-best_d1_0.95066/' else
 
 
 run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}-maxdepth{C.max_d}_{C.depth_ckpt.split('_')[0]}"
-name = f"{C.mode}_{run_id}"
+name = f"{C.mode}_'Pretrained-{os.environ['load_checkpoint']}_{run_id}"
 
 C.log_dir = os.path.join(os.environ['snapshot_dir'], name)
 C.tb_dir = C.log_dir

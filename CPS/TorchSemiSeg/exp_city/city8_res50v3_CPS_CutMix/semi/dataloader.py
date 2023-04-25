@@ -2,18 +2,20 @@ from PIL import Image
 from furnace.utils.visualize import print_iou, show_img
 from furnace.datasets.BaseDataset import BaseDataset
 from furnace.utils.img_utils import generate_random_crop_pos, random_crop_pad_to_shape
+import os
+import sys
+sys.path.append(os.getcwd() + '../../../')
+sys.path.append(os.getcwd() + '../../')
+sys.path.append(os.getcwd() + '../')
 from config import config as config
 import random
 from torch.utils import data
 import numpy as np
 import torch
 import cv2
-import os
-import sys
 
-for n in range(1, 4):
-    m = '../'
-    sys.path.append(m * n)
+
+
 
 
 '''
