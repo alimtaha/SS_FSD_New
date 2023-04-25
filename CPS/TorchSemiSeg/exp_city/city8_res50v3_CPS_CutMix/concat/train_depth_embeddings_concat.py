@@ -221,7 +221,7 @@ else:
     )
     mask_collate_fn = SegCollate(batch_aug_fn=add_mask_params_to_batch)
 
-+ '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
+#+ '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
 tb_dir = config.tb_dir
 logger = SummaryWriter(
     log_dir= config.tb_dir,
@@ -638,6 +638,9 @@ with Engine(custom_parser=parser) as engine:
                         epoch,
                         minibatch['fn'][0],
                         None)
+
+                if step % 1000 == 0:
+                    plot_grads(model, step, logger)
 
             if step % config.validate_every == 0 or (
                     is_debug and step % 10 == 0):

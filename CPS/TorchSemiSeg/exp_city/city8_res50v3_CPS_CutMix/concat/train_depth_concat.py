@@ -606,6 +606,9 @@ with Engine(custom_parser=parser) as engine:
                         epoch,
                         minibatch['fn'][0],
                         None)
+                    
+                if step % 1000 == 0:
+                    plot_grads(model, step, logger)
 
             if step % config.validate_every == 0 or (
                     is_debug and step % 10 == 0):

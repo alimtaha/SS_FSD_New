@@ -80,7 +80,7 @@ def set_random_seed(seed, deterministic=False):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-def plot_grads(model, step, writer):
+def plot_grads(model, step, writer, embeddings=False):
     backbone_mean = []
     backbone_std = []
     depth_backbone_mean = []
@@ -89,29 +89,51 @@ def plot_grads(model, step, writer):
     aspp_std = []
     depth_aspp_mean = []
     depth_aspp_std = []
+    depth_e3_mean = []
+    depth_e3_std = []
+    depth_e1_mean = []
+    depth_e1_std = []
 
     for name, params in model.named_parameters():
         if name.startswith('branch1.backbone'):
             backbone_mean.append(params.data.mean())
             backbone_std.append(params.data.std())
-        if name.startswith('branch1.depth_backbone'):
-            depth_backbone_mean.append(params.data.mean())
-            depth_backbone_std.append(params.data.std())
+        if embeddings:
+
+            if name.startswith('branch1.head.e3_conv'):
+                depth_e3_mean.append(params.data.mean())
+                depth_e3_std.append(params.data.std())
+            if name.startswith('branch1.head.e1_conv'):
+                depth_e1_mean.append(params.data.mean())
+                depth_e1_std.append(params.data.std())
+        else:
+            if name.startswith('branch1.depth_backbone'):
+                depth_backbone_mean.append(params.data.mean())
+                depth_backbone_std.append(params.data.std())
+            if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
+                depth_aspp_mean.append(params.data.mean())
+                depth_aspp_std.append(params.data.std())
         if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
             aspp_mean.append(params.data.mean())
             aspp_std.append(params.data.std())
-        if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
-            depth_aspp_mean.append(params.data.mean())
-            depth_aspp_std.append(params.data.std())
+
 
     writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
+    
+    if embeddings:
+        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std), global_step=step, bins='tensorflow')
+       
+    else:
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
 
 
 def compute_metric(results):
@@ -246,6 +268,22 @@ with Engine(custom_parser=parser) as engine:
                     'gt_root': config.gt_root_folder,
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
+
+    if config.load_checkpoint:
+        state_dict = torch.load(config.checkpoint_path)
+        
+        own_state = model.state_dict()
+        print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in state_dict['model'].items():
+            if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+                continue
+        #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
+            param = param.data
+            own_state[name].copy_(param)
+
+        print('Checkpoint loaded: ', config.checkpoint_path)
+    else:
+        print('No Checkpont Loaded')
 
     trainval_pre = TrainValPre(config.image_mean, config.image_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
