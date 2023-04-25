@@ -5,7 +5,7 @@ import os
 sys.path.append(os.getcwd() + '/../../..')
 sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
-import mask_gen
+import mask_gen_depth
 from torch.utils.tensorboard import SummaryWriter
 from matplotlib import pyplot as plt
 from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision
@@ -16,16 +16,18 @@ from furnace.engine.engine import Engine
 from furnace.engine.lr_policy import WarmUpPolyLR
 from furnace.utils.visualize import print_iou, show_img
 from furnace.utils.init_func import init_weight, group_weight
+from furnace.utils.img_utils import generate_random_uns_crop_pos
 import random
 import cv2
-from eval import SegEvaluator
-from network import Network, count_params
-from dataloader import get_train_loader, TrainValPre, CityScape
+from eval_depth_concat import SegEvaluator
+from dataloader_depth_embeddings_concat import CityScape, get_train_loader
+from network_depth_embeddings_concat import Network, count_params
 from config import config
+from matplotlib import colors
 from PIL import Image
+from dataloader_depth_concat import TrainValPre
 from torch.utils import data
 import torch.backends.cudnn as cudnn
-import torch.distributed as dist
 import torch.nn.functional as F
 import torch.nn as nn
 import torchvision.utils
@@ -46,12 +48,11 @@ import os
 
 PROJECT = 'CPS'
 if config.weak_labels:
-    experiment_name = 'weak_labels' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
-    '_L' + str(config.lr) + '_NoD_' + str(config.image_height) + 'size'
+    experiment_name = 'weak_labels' + '_ConcatD_' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
 else:
-    experiment_name = str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
-    '_L' + str(config.lr) + '_NoD_' + str(config.image_height) + 'size'
-print('File Name: No Depth - Semi Supervised')
+    experiment_name = '_ConcatD_' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
+    '_L' + str(config.lr) + str(config.image_height) + 'size'
 
 '''
 try:
@@ -140,7 +141,7 @@ def compute_metric(results):
 
 def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
     image_viz = (imgs[0,
-                      :,
+                      :3,
                       :,
                       :].squeeze().cpu().numpy() * np.expand_dims(np.expand_dims(config.image_std,
                                                                                  axis=1),
@@ -148,13 +149,14 @@ def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
                                                                                                           axis=1),
                                                                                            axis=2)) * 255.0
     image_viz = image_viz.transpose(1, 2, 0)
+    depth_image = imgs[0, 3:, :, :].squeeze().cpu(
+    ).numpy() * config.dimage_std + config.dimage_mean
     label = np.asarray(gts[0, :, :].squeeze().cpu(), dtype=np.uint8)
     clean = np.zeros(label.shape)
-    pred_viz = torch.argmax(pred[0, :, :, :].squeeze(), dim=0).cpu()
-
+    pred_viz = torch.argmax(pred[0, :, :, :], dim=0).cpu()
     pred_viz = np.array(pred_viz, np.uint8)
     comp_img = show_img(CityScape.get_class_colors(), config.background, image_viz, clean,  # image size is 720 x 2190 x 3
-                        label, pred_viz)
+                        label, depth_image, pred_viz)
     # logger needs the RGB dimension as the first one
     comp_img = comp_img.transpose(2, 0, 1)
     if step_test is None:
@@ -169,42 +171,51 @@ def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
             step)
 
 
-'''
-For CutMix
-
-C.cutmix_mask_prop_range = (0.25, 0.5) #CutMix will define areas for augmentation between 0.25-0.5 the area of an image
-C.cutmix_boxmask_n_boxes = 3
-C.cutmix_boxmask_fixed_aspect_ratio = False
-C.cutmix_boxmask_by_size = False
-C.cutmix_boxmask_outside_bounds = False
-C.cutmix_boxmask_no_invert = False
-'''
-
-mask_generator = mask_gen.BoxMaskGenerator(
-    prop_range=config.cutmix_mask_prop_range,
-    n_boxes=config.cutmix_boxmask_n_boxes,
-    random_aspect_ratio=not config.cutmix_boxmask_fixed_aspect_ratio,
-    prop_by_area=not config.cutmix_boxmask_by_size,
-    within_bounds=not config.cutmix_boxmask_outside_bounds,
-    invert=not config.cutmix_boxmask_no_invert)
-
-add_mask_params_to_batch = mask_gen.AddMaskParamsToBatch(
-    mask_generator
-)
 collate_fn = SegCollate()
-mask_collate_fn = SegCollate(batch_aug_fn=add_mask_params_to_batch)
+
+if config.depthmix:
+    import mask_gen_depth
+    mask_generator = mask_gen_depth.BoxMaskGenerator(
+        prop_range=config.depthmix_mask_prop_range,
+        n_boxes=config.depthmix_boxmask_n_boxes,
+        random_aspect_ratio=not config.depthmix_boxmask_fixed_aspect_ratio,
+        prop_by_area=not config.depthmix_boxmask_by_size,
+        within_bounds=not config.depthmix_boxmask_outside_bounds,
+        invert=not config.depthmix_boxmask_no_invert)
+    mask_collate_fn = SegCollate(batch_aug_fn=None)
+
+
+else:
+    import mask_gen
+    mask_generator = mask_gen.BoxMaskGenerator(
+        prop_range=config.cutmix_mask_prop_range,
+        n_boxes=config.cutmix_boxmask_n_boxes,
+        random_aspect_ratio=not config.cutmix_boxmask_fixed_aspect_ratio,
+        prop_by_area=not config.cutmix_boxmask_by_size,
+        within_bounds=not config.cutmix_boxmask_outside_bounds,
+        invert=not config.cutmix_boxmask_no_invert)
+    add_mask_params_to_batch = mask_gen.AddMaskParamsToBatch(
+        mask_generator
+    )
+    mask_collate_fn = SegCollate(batch_aug_fn=add_mask_params_to_batch)
 
 # + '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
-tb_dir = config.tb_dir
-logger = SummaryWriter(
-    log_dir= config.tb_dir,
-    comment=experiment_name
-    )
+# tb_dir = config.tb_dir
+# logger = SummaryWriter(
+#     log_dir= config.tb_dir,
+#     comment=experiment_name
+#     )
 
-v3_embedder = SummaryWriter(
-    log_dir=tb_dir +
-    '_v3embedder',
-    comment=experiment_name)
+#Uncomment lines 423/424
+
+# v3_embedder = SummaryWriter(
+#     log_dir=tb_dir +
+#     '_v3embedder',
+#     comment=experiment_name)
+
+#path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
+
+
 parser = argparse.ArgumentParser()
 os.environ['MASTER_PORT'] = '169711'
 
@@ -233,8 +244,6 @@ with Engine(custom_parser=parser) as engine:
     #run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{config.batch_size}-tep{config.nepochs}-lr{config.lr}-wd{config.weight_decay}-{uuid.uuid4()}"
     #name = f"{experiment_name}_{run_id}"
     #wandb.init(project=PROJECT, name=name, tags='Road Only', entity = "alitaha")
-
-    path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
 
     # config network and criterion
     # this is used for the min kept variable in CrossEntropyLess, basically
@@ -267,7 +276,23 @@ with Engine(custom_parser=parser) as engine:
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
 
-    trainval_pre = TrainValPre(config.image_mean, config.image_std)
+    if config.load_checkpoint:
+        state_dict = torch.load(config.checkpoint_path)
+        
+        own_state = model.state_dict()
+        print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in state_dict['model'].items():
+            if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+                continue
+        #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
+            param = param.data
+            own_state[name].copy_(param)
+
+        print('Checkpoint loaded: ', config.checkpoint_path)
+    else:
+        print('No Checkpont Loaded')
+
+    trainval_pre = TrainValPre(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
 
     test_loader = data.DataLoader(test_dataset,
@@ -350,7 +375,7 @@ with Engine(custom_parser=parser) as engine:
 
     print("Number of Params", count_params(model))
 
- #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
+    #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
 
     step = 0
     best_miou = 0
@@ -368,6 +393,19 @@ with Engine(custom_parser=parser) as engine:
             unsupervised_train_sampler_1.set_epoch(epoch)
         bar_format = '{desc}[{elapsed}<{remaining},{rate_fmt}]'
 
+        # generate unsupervsied crops
+        if config.depthmix:
+            uns_crops = []
+            for _ in range(config.max_samples):
+                uns_crops.append(
+                    generate_random_uns_crop_pos(
+                        config.img_shape_h,
+                        config.img_shape_w,
+                        config.image_height,
+                        config.image_width))
+            unsupervised_train_loader_0.dataset.uns_crops = uns_crops
+            unsupervised_train_loader_1.dataset.uns_crops = uns_crops
+
         if is_debug:
             # the tqdm function will invoke file.write(whatever) to write
             # progress of the bar and here using sys.stdout.write will write to
@@ -381,8 +419,8 @@ with Engine(custom_parser=parser) as engine:
                 bar_format=bar_format)
 
         #wandb.log({"Epoch": epoch}, step=step)
-        if engine.local_rank == 0:
-            logger.add_scalar('Epoch', epoch, step)
+        #if engine.local_rank == 0:
+        #    logger.add_scalar('Epoch', epoch, step)
 
         dataloader = iter(train_loader)
         # therefore the batch will instead be iterarted within each training
@@ -399,6 +437,8 @@ with Engine(custom_parser=parser) as engine:
         ''' supervised part '''
         for idx in pbar:
 
+            torch.cuda.empty_cache()
+
             optimizer_l.zero_grad()
             optimizer_r.zero_grad()
             engine.update_iteration(epoch, idx)
@@ -410,14 +450,26 @@ with Engine(custom_parser=parser) as engine:
 
             imgs = minibatch['data']
             gts = minibatch['label']
+            feats = minibatch['embeddings']
             unsup_imgs_0 = unsup_minibatch_0['data']
+            unsup_feats_0 = unsup_minibatch_0['embeddings']
             unsup_imgs_1 = unsup_minibatch_1['data']
-            mask_params = unsup_minibatch_0['mask_params']
+            unsup_feats_1 = unsup_minibatch_1['embeddings']
+
+            if config.depthmix:
+                mask_params = mask_generator.generate_depth_masks(
+                    imgs.shape[0], imgs.shape[2:4], imgs[:, 3:, :, :], unsup_imgs_0, unsup_imgs_1)
+                mask_params = torch.from_numpy(mask_params).long()
+            else:
+                mask_params = unsup_minibatch_0['mask_params']
 
             imgs = imgs.to(device)  # .cuda(non_blocking=True)
             gts = gts.to(device)  # .cuda(non_blocking=True)
+            feats = feats.to(device)
             unsup_imgs_0 = unsup_imgs_0.to(device)  # .cuda(non_blocking=True)
+            unsup_feats_0 = unsup_feats_0.to(device)
             unsup_imgs_1 = unsup_imgs_1.to(device)  # .cuda(non_blocking=True)
+            unsup_feats_1 = unsup_feats_1.to(device)
             mask_params = mask_params.to(device)  # .cuda(non_blocking=True)
 
             #if step==0: logger.add_graph(model.branch1, imgs[:1,:,:,:])
@@ -429,19 +481,38 @@ with Engine(custom_parser=parser) as engine:
             # augmenting the unsupervised 0 images into the 1 images -this is
             # why we have two unsup loaders so that we can get different random
             # images to augment in every iteration
+            
+            #rescaled_masks - using torch.nn.functional.interpolation for it
+            
+            #1/16th the size
+            b_16, c_16, h_16, w_16 = unsup_feats_0[0].shape
+            e3_mask = torch.nn.functional.interpolate(batch_mix_masks, (b_16, 1, h_16, w_16), mode='nearest')
+
+            #1/4th the size
+            b_4, c_4, h_4, w_4 = unsup_feats_0[0].shape
+            e1_mask = torch.nn.functional.interpolate(batch_mix_masks, (b_4, 1, h_4, w_4), mode='nearest')
+
+            unsup_e3_mixed = unsup_feats_0[0] * \
+                (1 - e3_mask) + unsup_imgs_1[0] * e3_mask
+
+            unsup_e1_mixed = unsup_feats_0[1] * \
+                (1 - e1_mask) + unsup_imgs_1[1] * e1_mask
+
+            unsup_feats_mixed = (unsup_e3_mixed, unsup_e1_mixed)
+
             unsup_imgs_mixed = unsup_imgs_0 * \
                 (1 - batch_mix_masks) + unsup_imgs_1 * batch_mix_masks
 
             with torch.no_grad():
                 # Estimate the pseudo-label with branch#1 & supervise branch#2
                 # step defines which branch we use
-                _, logits_u0_tea_1 = model(unsup_imgs_0, step=1)
-                _, logits_u1_tea_1 = model(unsup_imgs_1, step=1)
+                _, logits_u0_tea_1 = model(unsup_imgs_0, unsup_feats_0, step=1)
+                _, logits_u1_tea_1 = model(unsup_imgs_1, unsup_feats_1, step=1)
                 logits_u0_tea_1 = logits_u0_tea_1.detach()
                 logits_u1_tea_1 = logits_u1_tea_1.detach()
                 # Estimate the pseudo-label with branch#2 & supervise branch#1
-                _, logits_u0_tea_2 = model(unsup_imgs_0, step=2)
-                _, logits_u1_tea_2 = model(unsup_imgs_1, step=2)
+                _, logits_u0_tea_2 = model(unsup_imgs_0, unsup_feats_0, step=2)
+                _, logits_u1_tea_2 = model(unsup_imgs_1, unsup_feats_1, step=2)
                 logits_u0_tea_2 = logits_u0_tea_2.detach()
                 logits_u1_tea_2 = logits_u1_tea_2.detach()
 
@@ -459,11 +530,13 @@ with Engine(custom_parser=parser) as engine:
             _, ps_label_2 = torch.max(logits_cons_tea_2, dim=1)
             ps_label_2 = ps_label_2.long()
 
+
             unsup_imgs_mixed.to(device)
+            unsup_feats_mixed.to(device)
             # Get student#1 prediction for mixed image
-            _, logits_cons_stu_1 = model(unsup_imgs_mixed, step=1)
+            _, logits_cons_stu_1 = model(unsup_imgs_mixed, unsup_feats_mixed, step=1)
             # Get student#2 prediction for mixed image
-            _, logits_cons_stu_2 = model(unsup_imgs_mixed, step=2)
+            _, logits_cons_stu_2 = model(unsup_imgs_mixed, unsup_feats_mixed, step=2)
 
             cps_loss = criterion_cps(
                 logits_cons_stu_1, ps_label_2) + criterion_cps(logits_cons_stu_2, ps_label_1)
@@ -472,8 +545,8 @@ with Engine(custom_parser=parser) as engine:
             cps_loss = cps_loss * config.cps_weight
 
             # supervised loss on both models
-            _, sup_pred_l = model(imgs, step=1)
-            _, sup_pred_r = model(imgs, step=2)
+            _, sup_pred_l = model(imgs, feats, step=1)
+            _, sup_pred_r = model(imgs, feats, step=2)
 
             loss_sup = criterion(sup_pred_l, gts)
             #dist.all_reduce(loss_sup, dist.ReduceOp.SUM)
@@ -528,10 +601,6 @@ with Engine(custom_parser=parser) as engine:
             sum_cps += cps_loss.item()
 
             if engine.local_rank == 0 and step % 20 == 0:
-                #wandb.log({f"Train/Loss_Sup_R": loss_sup_r}, step=step)
-                #wandb.log({f"Train/Loss_Sup_L": loss_sup}, step=step)
-                #wandb.log({f"Train/Loss_CPS": cps_loss}, step=step)
-                #wandb.log({f"Train/Total Loss": loss}, step=step)
                 logger.add_scalar('train_loss_sup', loss_sup, step)
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
@@ -545,11 +614,9 @@ with Engine(custom_parser=parser) as engine:
                         epoch,
                         minibatch['fn'][0],
                         None)
-                    #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
-                    # wandb.log({"examples": images}
 
             if step % config.validate_every == 0 or (
-                    is_debug and (step % 10 == 0)):
+                    is_debug and step % 10 == 0):
                 all_results = []
                 prec_road = []
                 prec_non_road = []
@@ -590,14 +657,14 @@ with Engine(custom_parser=parser) as engine:
 
                         imgs_test = batch_test['data'].to(device)
                         gts_test = batch_test['label'].to(device)
-                        #pred_test = model.branch1(imgs_test)
+                        
                         #Embedding
                         pred_test, _, v3_feats = model.branch1(imgs_test)
 
                         subset = 2000
 
                         #project embeddings
-                        if False: #(step-config.embed_every) % config.embed_every == 0:
+                        if False: #(step-config.embed_every) % config.embed_every == 0 or is_debug:
 
                             if step_test % 10 == 0:
 
@@ -752,10 +819,11 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
-                if (step-config.embed_every) % config.embed_every == 0:
+                if (step-config.embed_every) % config.embed_every == 0 or is_debug:
                     #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
                     v3_embedder.add_embedding(v3_feats_sample, v3_labels_sample, global_step=step)
                     print('embedding added at step', step)
+                    del v3_feats_sample, v3_labels_sample, v3_feats, v3_labels
 
                 if mean_IU > best_miou:
                     best_miou = mean_IU
@@ -773,7 +841,13 @@ with Engine(custom_parser=parser) as engine:
                         'f1_score': round(f1_score, 2)
                     }
 
+                #The following lines clear the embeddings from the GPU which causes out of memory error (copy model to CPU and back forces clear)
+                model.cpu()
+                torch.cuda.empty_cache()
+                model.to(device)
+
                 model.train()
+                torch.cuda.empty_cache()
 
             pbar.set_description(print_str, refresh=False)
 
@@ -802,7 +876,9 @@ with Engine(custom_parser=parser) as engine:
         'image_width': config.image_width,
         'dimage_mean': config.dimage_mean,
         'dimage_std': config.dimage_std,
-        'num_classes': config.num_classes
+        'num_classes': config.num_classes,
+        'max_depth': config.max_d,
+        'depth_dataset': config.depth_ckpt
     }
 
     logger.add_hparams(hparams_dict, best_metrics)
@@ -810,9 +886,9 @@ with Engine(custom_parser=parser) as engine:
 
     if engine.distributed and (engine.local_rank == 0):
         engine.save_and_link_checkpoint(config.snapshot_dir,
-                                    config.log_dir,
-                                    None, epoch)
+                                            config.log_dir,
+                                            None, epoch)
     elif not engine.distributed:
         engine.save_and_link_checkpoint(config.snapshot_dir,
-                                    config.log_dir,
-                                    None, epoch)
+                                            config.log_dir,
+                                            None, epoch)

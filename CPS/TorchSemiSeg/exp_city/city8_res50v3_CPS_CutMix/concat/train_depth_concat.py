@@ -86,6 +86,39 @@ def set_random_seed(seed, deterministic=False):
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
+def plot_grads(model, step, writer):
+    backbone_mean = []
+    backbone_std = []
+    depth_backbone_mean = []
+    depth_backbone_std = []
+    aspp_mean = []
+    aspp_std = []
+    depth_aspp_mean = []
+    depth_aspp_std = []
+
+    for name, params in model.named_parameters():
+        if name.startswith('branch1.backbone'):
+            backbone_mean.append(params.data.mean())
+            backbone_std.append(params.data.std())
+        if name.startswith('branch1.depth_backbone'):
+            depth_backbone_mean.append(params.data.mean())
+            depth_backbone_std.append(params.data.std())
+        if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
+            aspp_mean.append(params.data.mean())
+            aspp_std.append(params.data.std())
+        if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
+            depth_aspp_mean.append(params.data.mean())
+            depth_aspp_std.append(params.data.std())
+
+    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
+
 
 def compute_metric(results):
     hist = np.zeros((config.num_classes, config.num_classes))

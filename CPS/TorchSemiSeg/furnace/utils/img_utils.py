@@ -21,22 +21,52 @@ def get_2dshape(shape, *, zero=True):
     return shape
 
 
-def random_crop_pad_to_shape(img, crop_pos, crop_size, pad_label_value):
-    h, w = img.shape[:2]  # get size of first two dimensions
-    start_crop_h, start_crop_w = crop_pos
-    assert ((start_crop_h < h) and (start_crop_h >= 0))
-    assert ((start_crop_w < w) and (start_crop_w >= 0))
+def random_crop_pad_to_shape(img, crop_pos, crop_size, pad_label_value, embeddings=False):
+    if embeddings == True:
+        for i in range(len(img)):
+            c, h, w = img[i].shape  # get size of first two dimensions
+            
+            start_crop_h, start_crop_w = crop_pos
 
-    crop_size = get_2dshape(crop_size)
-    crop_h, crop_w = crop_size
+            #calc scaling from original image (either 4 or 16)
+            scaling = 1024/h
+            
+            start_crop_h = int(start_crop_h // scaling)
+            start_crop_w = int(start_crop_w // scaling)
 
-    img_crop = img[start_crop_h:start_crop_h + crop_h,
-                   start_crop_w:start_crop_w + crop_w, ...]
+            assert ((start_crop_h < h) and (start_crop_h >= 0))
+            assert ((start_crop_w < w) and (start_crop_w >= 0))
 
-    img_, margin = pad_image_to_shape(img_crop, crop_size, cv2.BORDER_CONSTANT,
-                                      pad_label_value)
+            crop_size = get_2dshape(crop_size)
+            
+            crop_h, crop_w = crop_size
+            crop_h = int(crop_h // scaling)
+            crop_w = int(crop_w // scaling)
 
-    return img_, margin
+            img[i] = img[i][:, start_crop_h:start_crop_h + crop_h,
+                        start_crop_w:start_crop_w + crop_w]
+
+            # img_, margin = pad_image_to_shape(img_crop, crop_size, cv2.BORDER_CONSTANT,
+            #                                 pad_label_value)
+
+        return img, None
+    
+    else:
+        h, w = img.shape[:2]  # get size of first two dimensions
+        start_crop_h, start_crop_w = crop_pos
+        assert ((start_crop_h < h) and (start_crop_h >= 0))
+        assert ((start_crop_w < w) and (start_crop_w >= 0))
+
+        crop_size = get_2dshape(crop_size)
+        crop_h, crop_w = crop_size
+
+        img_crop = img[start_crop_h:start_crop_h + crop_h,
+                    start_crop_w:start_crop_w + crop_w, ...]
+
+        img_, margin = pad_image_to_shape(img_crop, crop_size, cv2.BORDER_CONSTANT,
+                                        pad_label_value)
+
+        return img_, margin
 
 
 def generate_random_uns_crop_pos(h, w, crop_h, crop_w):

@@ -76,19 +76,6 @@ def set_random_seed(seed, deterministic=False):
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-def weight_histograms_conv2d(writer, step, weights, layer_number):
-    weights_shape = weights.shape
-    num_kernels = weights_shape[0]
-    for k in range(num_kernels):
-        flattened_weights = weights[k].flatten()
-        tag = f"layer_{layer_number}/kernel_{k}"
-        writer.add_histogram(tag, flattened_weights, global_step=step, bins='tensorflow')
-
-def weight_histograms_linear(writer, step, weights, layer_number):
-    flattened_weights = weights.flatten()
-    tag = f"layer_{layer_number}"
-    writer.add_histogram(tag, flattened_weights, global_step=step, bins='tensorflow')
-
 def plot_grads(model, step, writer):
     backbone_mean = []
     backbone_std = []
@@ -276,33 +263,19 @@ with Engine(custom_parser=parser) as engine:
                 BatchNorm2d, config.bn_eps, config.bn_momentum,
                 mode='fan_in', nonlinearity='relu')
 
-    if os.getenv('load_checkpoint') is not None:
-        if str(os.environ['load_checkpoint']) == 'True':
+    if config.load_checkpoint:
+        state_dict = torch.load(config.checkpoint_path)
+        
+        own_state = model.state_dict()
+        print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in state_dict['model'].items():
+            if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+                continue
+        #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
+            param = param.data
+            own_state[name].copy_(param)
 
-            state_dict = torch.load(config.checkpoint_path)
-            
-            own_state = model.state_dict()
-            print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
-            for name, param in state_dict['model'].items():
-                if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
-                    continue
-            #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
-                param = param.data
-                own_state[name].copy_(param)
-
-            #Branch 1
-            #Backbone
-            # model.branch1.backbone.weight.copy_(state_dict['branch1.backbone.weight'])
-            # #Head - Only reduce since last conv would have a dimension mismatch
-            # model.branch1.head.reduce.weight.copy_(state_dict['branch1.head.reduce.weight'])
-            # #ASPP
-            # model.branch1.head.aspp.pool_u2pl.weight.copy_(state_dict['branch1.head.aspp.pool_u2pl.weight'])
-            # model.branch1.head.aspp.map_convs.weight.copy_(state_dict['branch1.head.aspp.map_convs.weight'])
-            # model.branch1.head.aspp.red_conv.weight.copy_(state_dict['branch1.head.aspp.red_conv.weight'])
-            # #Classifier
-            # model.branch1.classifier.weight.copy_(state_dict['branch1.classifier.weight'])
-
-            print('Checkpoint loaded: ', config.checkpoint_path)
+        print('Checkpoint loaded: ', config.checkpoint_path)
     else:
         print('No Checkpont Loaded')
 
