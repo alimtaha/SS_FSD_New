@@ -295,6 +295,22 @@ with Engine(custom_parser=parser) as engine:
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
 
+    if config.load_checkpoint:
+        state_dict = torch.load(config.checkpoint_path)
+        
+        own_state = model.state_dict()
+        print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in state_dict['model'].items():
+            if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+                continue
+        #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
+            param = param.data
+            own_state[name].copy_(param)
+
+        print('Checkpoint loaded: ', config.checkpoint_path)
+    else:
+        print('No Checkpont Loaded')
+
     trainval_pre = TrainValPre(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
 
@@ -581,7 +597,7 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                if step % 100 == 0:
+                if step % 500 == 0:
                     viz_image(
                         imgs,
                         gts,

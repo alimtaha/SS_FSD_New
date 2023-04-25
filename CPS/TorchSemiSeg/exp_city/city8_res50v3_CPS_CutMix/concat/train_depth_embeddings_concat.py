@@ -629,7 +629,7 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                if step % 100 == 0:
+                if step % 500 == 0:
                     viz_image(
                         imgs,
                         gts,
@@ -681,9 +681,12 @@ with Engine(custom_parser=parser) as engine:
 
                         imgs_test = batch_test['data'].to(device)
                         gts_test = batch_test['label'].to(device)
+                        feats_test = batch_test['embeddings']
+                        e3_test, e1_test = feats_test
+                        feats_test = (e3_test.to(device), e1_test.to(device))
                         
                         #Embedding
-                        pred_test, _, v3_feats = model.branch1(imgs_test)
+                        pred_test, _, v3_feats = model.branch1(imgs_test, feats_test)
 
                         subset = 2000
 

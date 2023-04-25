@@ -205,7 +205,7 @@ class TrainValPre(object):  # Validation while Training runs pre processing
 
     def __call__(self, img, dimg=None, gt=None, embeddings=False):
         img, dimg = normalize(
-            img, self.img_mean, self.img_std, dimg, self.dimg_mean, self.dimg_std)
+            img, self.img_mean, self.img_std, dimg, self.dimg_mean, self.dimg_std, embeddings=True)
         img = img.transpose(2, 0, 1)
         # gt = gt - 1
         extra_dict = {}
