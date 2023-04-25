@@ -95,44 +95,44 @@ def plot_grads(model, step, writer, embeddings=False):
 
     for name, params in model.named_parameters():
         if name.startswith('branch1.backbone'):
-            backbone_mean.append(params.data.mean())
-            backbone_std.append(params.data.std())
+            backbone_mean.append(params.data.mean().cpu())
+            backbone_std.append(params.data.std().cpu())
         if embeddings:
 
             if name.startswith('branch1.head.e3_conv'):
-                depth_e3_mean.append(params.data.mean())
-                depth_e3_std.append(params.data.std())
+                depth_e3_mean.append(params.data.mean().cpu())
+                depth_e3_std.append(params.data.std()).cpu()
             if name.startswith('branch1.head.e1_conv'):
-                depth_e1_mean.append(params.data.mean())
-                depth_e1_std.append(params.data.std())
+                depth_e1_mean.append(params.data.mean().cpu())
+                depth_e1_std.append(params.data.std().cpu())
         else:
             if name.startswith('branch1.depth_backbone'):
-                depth_backbone_mean.append(params.data.mean())
-                depth_backbone_std.append(params.data.std())
+                depth_backbone_mean.append(params.data.mean().cpu())
+                depth_backbone_std.append(params.data.std().cpu())
             if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
-                depth_aspp_mean.append(params.data.mean())
-                depth_aspp_std.append(params.data.std())
+                depth_aspp_mean.append(params.data.mean().cpu())
+                depth_aspp_std.append(params.data.std().cpu())
         if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
-            aspp_mean.append(params.data.mean())
-            aspp_std.append(params.data.std())
+            aspp_mean.append(params.data.mean().cpu())
+            aspp_std.append(params.data.std().cpu())
 
 
-    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean.cpu()), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std.cpu()), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean.cpu()), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std.cpu()), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
     
     if embeddings:
-        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std), global_step=step, bins='tensorflow')
        
     else:
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean.cpu()), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
 
 
 def compute_metric(results):
