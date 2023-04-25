@@ -190,7 +190,7 @@ if os.getenv('load_checkpoint') is not None:
         C.load_checkpoint = False
 
 run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}-maxdepth{C.max_d}_{C.depth_ckpt.split('_')[0]}"
-name = f"{C.mode}_'Pretrained-{C.load_checkpoint}_{run_id}"
+name = f"{C.mode}_Pretrained-{C.load_checkpoint}_{run_id}"
 
 C.log_dir = os.path.join(os.environ['snapshot_dir'], name)
 C.tb_dir = C.log_dir

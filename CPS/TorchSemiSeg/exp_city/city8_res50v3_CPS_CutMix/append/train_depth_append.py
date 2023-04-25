@@ -63,20 +63,6 @@ else:
     experiment_name = '_AppendD' + str(config.nepochs) + 'E_SS' + str(config.labeled_ratio) + \
     '_L' + str(config.lr) + str(config.image_height) + 'size'
 
-'''
-try:
-    from apex.parallel import DistributedDataParallel, SyncBatchNorm
-except ImportError:
-    raise ImportError(
-        "Please install apex from https://www.github.com/nvidia/apex .")
-
-try:
-    from azureml.core import Run
-    azure = True
-    run = Run.get_context()
-except:
-    azure = False
-'''
 if os.getenv('debug') is not None:
     is_debug = True if str(os.environ['debug']) == 'True' else False
 else:
@@ -131,22 +117,22 @@ def plot_grads(model, step, writer, embeddings=False):
             aspp_std.append(params.data.std())
 
 
-    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean.cpu()), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std.cpu()), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean.cpu()), global_step=step, bins='tensorflow')
+    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std.cpu()), global_step=step, bins='tensorflow')
     
     if embeddings:
-        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std.cpu()), global_step=step, bins='tensorflow')
        
     else:
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean.cpu()), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std.cpu()), global_step=step, bins='tensorflow')
 
 
 def compute_metric(results):
