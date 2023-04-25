@@ -222,10 +222,10 @@ logger = SummaryWriter(
     comment=experiment_name
     )
 
-v3_embedder = SummaryWriter(
-    log_dir=tb_dir +
-    '_v3embedder',
-    comment=experiment_name)
+# v3_embedder = SummaryWriter(
+#     log_dir=tb_dir +
+#     '_v3embedder',
+#     comment=experiment_name)
 parser = argparse.ArgumentParser()
 os.environ['MASTER_PORT'] = '169711'
 
@@ -828,7 +828,7 @@ with Engine(custom_parser=parser) as engine:
                         100,
                         2))
 
-                if ((step-config.embed_every) % config.embed_every == 0) or (is_debug):
+                if False: #((step-config.embed_every) % config.embed_every == 0) or (is_debug):
                     #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
                     v3_embedder.add_embedding(v3_feats_sample, v3_labels_sample, global_step=step)
                     print('embedding added at step', step)
