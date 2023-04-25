@@ -48,7 +48,6 @@ def random_mirror(img, dimg=None, gt=None, embeddings=False):
         img = cv2.flip(img, 1)
         if dimg is not None:
             if embeddings == True:
-                print(dimg[0].shape)
                 dimg[0] = dimg[0][:, :, ::-1]
                 dimg[1] = dimg[1][:, :, ::-1]
             else:
@@ -164,7 +163,6 @@ class TrainPre(
 
         else:
             crop_pos = generate_random_crop_pos(img.shape[:2], crop_size)
-            print('crop size', crop_pos, 'original_size', img.shape[:2])
 
         p_img, _ = random_crop_pad_to_shape(img, crop_pos, crop_size, 0)
         if gt is not None:
@@ -374,7 +372,7 @@ class CityScape(BaseDataset):
             'trainval_aug']:
             # image converted to torch array
             img = torch.from_numpy(np.ascontiguousarray(img)).float()
-            dimg = (torch.from_numpy(dimg[0]), torch.from_numpy(dimg[1]))
+            dimg = (torch.from_numpy(dimg[0].copy()), torch.from_numpy(dimg[1].copy()))
             
             if gt is not None:
                 # contiguous: This function returns an array with at least
@@ -419,7 +417,7 @@ class CityScape(BaseDataset):
             if embeddings == False:
                 dimg = np.array(Image.open(dpath))
             else:
-                dimg = [torch.load(dpath[0]).numpy(), torch.load(dpath[1]).numpy()]
+                dimg = [torch.load(dpath[0]), torch.load(dpath[1])]
         else:
             dimg = None
 

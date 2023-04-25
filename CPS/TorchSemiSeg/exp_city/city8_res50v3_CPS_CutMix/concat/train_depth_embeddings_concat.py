@@ -85,7 +85,7 @@ def set_random_seed(seed, deterministic=False):
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-def plot_grads(model, step, writer):
+def plot_grads(model, step, writer, embeddings=False):
     backbone_mean = []
     backbone_std = []
     depth_backbone_mean = []
@@ -94,29 +94,51 @@ def plot_grads(model, step, writer):
     aspp_std = []
     depth_aspp_mean = []
     depth_aspp_std = []
+    depth_e3_mean = []
+    depth_e3_std = []
+    depth_e1_mean = []
+    depth_e1_std = []
 
     for name, params in model.named_parameters():
         if name.startswith('branch1.backbone'):
             backbone_mean.append(params.data.mean())
             backbone_std.append(params.data.std())
-        if name.startswith('branch1.depth_backbone'):
-            depth_backbone_mean.append(params.data.mean())
-            depth_backbone_std.append(params.data.std())
+        if embeddings:
+
+            if name.startswith('branch1.head.e3_conv'):
+                depth_e3_mean.append(params.data.mean())
+                depth_e3_std.append(params.data.std())
+            if name.startswith('branch1.head.e1_conv'):
+                depth_e1_mean.append(params.data.mean())
+                depth_e1_std.append(params.data.std())
+        else:
+            if name.startswith('branch1.depth_backbone'):
+                depth_backbone_mean.append(params.data.mean())
+                depth_backbone_std.append(params.data.std())
+            if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
+                depth_aspp_mean.append(params.data.mean())
+                depth_aspp_std.append(params.data.std())
         if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
             aspp_mean.append(params.data.mean())
             aspp_std.append(params.data.std())
-        if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
-            depth_aspp_mean.append(params.data.mean())
-            depth_aspp_std.append(params.data.std())
+
 
     writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
     writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
+    
+    if embeddings:
+        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std), global_step=step, bins='tensorflow')
+       
+    else:
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
 
 
 def compute_metric(results):
@@ -199,21 +221,19 @@ else:
     )
     mask_collate_fn = SegCollate(batch_aug_fn=add_mask_params_to_batch)
 
-# + '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
-# tb_dir = config.tb_dir
-# logger = SummaryWriter(
-#     log_dir= config.tb_dir,
-#     comment=experiment_name
-#     )
++ '/{}'.format(experiment_name) + '/{}'.format(time.strftime("%b%d_%d-%H-%M", time.localtime()))                 #Tensorboard log dir
+tb_dir = config.tb_dir
+logger = SummaryWriter(
+    log_dir= config.tb_dir,
+    comment=experiment_name
+    )
 
-#Uncomment lines 423/424
+v3_embedder = SummaryWriter(
+    log_dir=tb_dir +
+    '_v3embedder',
+    comment=experiment_name)
 
-# v3_embedder = SummaryWriter(
-#     log_dir=tb_dir +
-#     '_v3embedder',
-#     comment=experiment_name)
-
-#path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
+path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
 
 
 parser = argparse.ArgumentParser()
@@ -419,8 +439,8 @@ with Engine(custom_parser=parser) as engine:
                 bar_format=bar_format)
 
         #wandb.log({"Epoch": epoch}, step=step)
-        #if engine.local_rank == 0:
-        #    logger.add_scalar('Epoch', epoch, step)
+        if engine.local_rank == 0:
+           logger.add_scalar('Epoch', epoch, step)
 
         dataloader = iter(train_loader)
         # therefore the batch will instead be iterarted within each training
@@ -465,11 +485,14 @@ with Engine(custom_parser=parser) as engine:
 
             imgs = imgs.to(device)  # .cuda(non_blocking=True)
             gts = gts.to(device)  # .cuda(non_blocking=True)
-            feats = feats.to(device)
+            e3_sup, e1_sup = feats
+            feats = (e3_sup.to(device), e1_sup.to(device))
             unsup_imgs_0 = unsup_imgs_0.to(device)  # .cuda(non_blocking=True)
-            unsup_feats_0 = unsup_feats_0.to(device)
-            unsup_imgs_1 = unsup_imgs_1.to(device)  # .cuda(non_blocking=True)
-            unsup_feats_1 = unsup_feats_1.to(device)
+            e3_unsup_0, e1_unsup_0 = unsup_feats_0
+            unsup_feats_0 = (e3_unsup_0.to(device), e1_unsup_0.to(device))
+            unsup_imgs_1 = unsup_imgs_1.to(device)  # .cuda(non_blocking=True)        
+            e3_unsup_1, e1_unsup_1 = unsup_feats_1
+            unsup_feats_1 = (e3_unsup_1.to(device), e1_unsup_1.to(device))
             mask_params = mask_params.to(device)  # .cuda(non_blocking=True)
 
             #if step==0: logger.add_graph(model.branch1, imgs[:1,:,:,:])
@@ -486,19 +509,19 @@ with Engine(custom_parser=parser) as engine:
             
             #1/16th the size
             b_16, c_16, h_16, w_16 = unsup_feats_0[0].shape
-            e3_mask = torch.nn.functional.interpolate(batch_mix_masks, (b_16, 1, h_16, w_16), mode='nearest')
+            e3_mask = torch.nn.functional.interpolate(batch_mix_masks, (h_16, w_16), mode='nearest').to(device)
 
             #1/4th the size
-            b_4, c_4, h_4, w_4 = unsup_feats_0[0].shape
-            e1_mask = torch.nn.functional.interpolate(batch_mix_masks, (b_4, 1, h_4, w_4), mode='nearest')
+            b_4, c_4, h_4, w_4 = unsup_feats_0[1].shape
+            e1_mask = torch.nn.functional.interpolate(batch_mix_masks, (h_4, w_4), mode='nearest').to(device)
 
             unsup_e3_mixed = unsup_feats_0[0] * \
-                (1 - e3_mask) + unsup_imgs_1[0] * e3_mask
+                (1 - e3_mask) + unsup_feats_1[0] * e3_mask
 
             unsup_e1_mixed = unsup_feats_0[1] * \
-                (1 - e1_mask) + unsup_imgs_1[1] * e1_mask
+                (1 - e1_mask) + unsup_feats_1[1] * e1_mask
 
-            unsup_feats_mixed = (unsup_e3_mixed, unsup_e1_mixed)
+            unsup_feats_mixed = (unsup_e3_mixed.to(device), unsup_e1_mixed.to(device))
 
             unsup_imgs_mixed = unsup_imgs_0 * \
                 (1 - batch_mix_masks) + unsup_imgs_1 * batch_mix_masks
@@ -532,7 +555,8 @@ with Engine(custom_parser=parser) as engine:
 
 
             unsup_imgs_mixed.to(device)
-            unsup_feats_mixed.to(device)
+            
+            #unsup_feats_mixed.to(device) - copied to GPU above
             # Get student#1 prediction for mixed image
             _, logits_cons_stu_1 = model(unsup_imgs_mixed, unsup_feats_mixed, step=1)
             # Get student#2 prediction for mixed image

@@ -176,7 +176,7 @@ class ASPP(nn.Module):
 
         self.leak_relu = nn.LeakyReLU()
 
-    def forward(self, x, d):
+    def forward(self, x):
         # Map convolutions
         _, _, h, w = x.size()
         out1 = F.interpolate(
@@ -262,9 +262,23 @@ class Head(nn.Module):
         #In channels are 768 vs normal 512 since concatenating backbone features, aspp image features and depth aspp features
         self.last_conv = nn.Sequential(
             nn.Conv2d(
-                768, 256, kernel_size=3, stride=1, padding=1, bias=False), norm_act(
+                1024, 256, kernel_size=3, stride=1, padding=1, bias=False), norm_act(
                 256, momentum=bn_momentum), nn.ReLU(), nn.Conv2d(
                 256, 256, kernel_size=3, stride=1, padding=1, bias=False), norm_act(
+                    256, momentum=bn_momentum), nn.ReLU(), )
+
+        self.e3_conv = nn.Sequential(
+            nn.Conv2d(
+                256, 256, kernel_size=1, stride=1, padding=0, bias=False), norm_act(
+                256, momentum=bn_momentum), nn.ReLU(), nn.Conv2d(
+                256, 256, kernel_size=1, stride=1, padding=0, bias=False), norm_act(
+                    256, momentum=bn_momentum), nn.ReLU(), )
+
+        self.e1_conv = nn.Sequential(
+            nn.Conv2d(
+                64, 256, kernel_size=1, stride=1, padding=0, bias=False), norm_act(
+                256, momentum=bn_momentum), nn.ReLU(), nn.Conv2d(
+                256, 256, kernel_size=1, stride=1, padding=0, bias=False), norm_act(
                     256, momentum=bn_momentum), nn.ReLU(), )
 
     def forward(self, f_list, depth):
@@ -272,6 +286,10 @@ class Head(nn.Module):
         f1 = self.aspp(f)
 
         e3, e1 = depth #Depth map feature embeddings
+        e3 = self.e3_conv(e3) + e3
+        
+        e1_b, e1_c, e1_h, e1_w = e1.shape
+        e1 = self.e1_conv(e1) # No skip connections due to GPU memory + e1.repeat(e1_b, 256, e1_h, e1_w)
 
         low_level_features = f_list[0]
         low_h, low_w = low_level_features.size(2), low_level_features.size(3)
@@ -284,7 +302,6 @@ class Head(nn.Module):
             mode='bilinear',
             align_corners=True)
 
-        print(e1.shape)
 
         e3 = F.interpolate(
             e3,
@@ -296,10 +313,8 @@ class Head(nn.Module):
 
         #May need bilinear interpolation for e1 depending on awkward crop sizes
 
-        print(e3.shape, e1.shape)
-
         f3 = torch.cat((f2, e3, low_level_features, e1), dim=1)
-        embed_feat = torch.concat((f3), dim=1)  #embed feats is aspp and depth aspp feats concatenated - changed to f3! Since f2 has no image contribution
+        embed_feat = f3 #torch.concat((f2, e3), dim=1)  #embed feats is aspp and depth aspp feats concatenated - changed to f3! Since f2 has no image contribution
         f4 = self.last_conv(f3)
 
         return f4, embed_feat
