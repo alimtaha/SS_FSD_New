@@ -20,7 +20,7 @@ from furnace.utils.img_utils import generate_random_uns_crop_pos
 import random
 import cv2
 from eval_depth_concat import SegEvaluator
-from dataloader_depth_embeddings_concat import CityScape, TrainValPre, get_train_loader
+from dataloader_depth_embeddings_concat import CityScape, TrainValPre, TrainValPre, get_train_loader
 from network_depth_embeddings_concat import Network, count_params
 from config import config
 from matplotlib import colors
@@ -140,10 +140,8 @@ def plot_grads(model, step, writer, embeddings=False):
 
         if embeddings:
             if name.startswith('branch1.head.e3_conv'):
-                branch1_depth_e3_mean.append(params.data.mean().cpu())
-                branch1_depth_e3_std.append(params.data.std().cpu())
-                branch1_depth_e3_mean_grads.append(params.grad.mean().cpu())
-                branch1_depth_e3_std_grads.append(params.grad.std().cpu())
+                depth_e3_mean.append(params.data.mean().cpu())
+                depth_e3_std.append(params.data.std()).cpu()
             if name.startswith('branch1.head.e1_conv'):
                 branch1_depth_e1_mean.append(params.data.mean().cpu())
                 branch1_depth_e1_std.append(params.data.std().cpu())
@@ -838,7 +836,7 @@ with Engine(custom_parser=parser) as engine:
                         None)
 
                 if step % 1000 == 0:
-                    plot_grads(model, step, logger)
+                    plot_grads(model, step, logger, embeddings=True)
 
             if step % config.validate_every == 0 or (
                     is_debug and step % 10 == 0):

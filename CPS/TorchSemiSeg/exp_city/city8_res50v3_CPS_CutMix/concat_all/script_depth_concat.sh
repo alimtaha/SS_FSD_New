@@ -9,8 +9,9 @@ export epochs=35
 export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
-export mode="Concat-Semi-Supervision"
+export mode="All-Labels-Concat-Semi-Supervision"
 export debug="False"
+export load_checkpoint="False"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'

@@ -11,7 +11,8 @@ export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
 export mode="Embeddings-Concat-Semi-Supervision"
 export debug="False"
-export load_checkpoint="True"
+export load_checkpoint="False"
+export depth_only="False"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'
