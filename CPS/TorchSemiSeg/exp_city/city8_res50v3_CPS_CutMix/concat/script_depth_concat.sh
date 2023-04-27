@@ -12,6 +12,7 @@ export WORLD_SIZE=1
 export mode="Concat-Semi-Supervision"
 export debug="False"
 export load_checkpoint="False"
+export depth_only="True"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'

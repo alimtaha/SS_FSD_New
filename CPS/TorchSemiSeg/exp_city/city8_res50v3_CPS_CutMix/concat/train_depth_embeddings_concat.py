@@ -20,12 +20,11 @@ from furnace.utils.img_utils import generate_random_uns_crop_pos
 import random
 import cv2
 from eval_depth_concat import SegEvaluator
-from dataloader_depth_embeddings_concat import CityScape, get_train_loader
+from dataloader_depth_embeddings_concat import CityScape, TrainValPre, get_train_loader
 from network_depth_embeddings_concat import Network, count_params
 from config import config
 from matplotlib import colors
 from PIL import Image
-from dataloader_depth_concat import TrainValPre
 from torch.utils import data
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
@@ -86,59 +85,250 @@ def set_random_seed(seed, deterministic=False):
             torch.backends.cudnn.benchmark = False
 
 def plot_grads(model, step, writer, embeddings=False):
-    backbone_mean = []
-    backbone_std = []
-    depth_backbone_mean = []
-    depth_backbone_std = []
-    aspp_mean = []
-    aspp_std = []
-    depth_aspp_mean = []
-    depth_aspp_std = []
-    depth_e3_mean = []
-    depth_e3_std = []
-    depth_e1_mean = []
-    depth_e1_std = []
+    
+    #Weights
+    branch1_backbone_mean = []
+    branch1_backbone_std = []
+    branch1_depth_backbone_mean = []
+    branch1_depth_backbone_std = []
+    branch1_aspp_mean = []
+    branch1_aspp_std = []
+    branch1_depth_aspp_mean = []
+    branch1_depth_aspp_std = []
+    branch1_depth_e3_mean = []
+    branch1_depth_e3_std = []
+    branch1_depth_e1_mean = []
+    branch1_depth_e1_std = []
+    branch1_last_conv_mean = []
+    branch1_last_conv_std = []
+    branch1_classifier_mean = []
+    branch1_classifier_std = []
+    
+    #Gradients
+    branch1_backbone_mean_grads = []
+    branch1_backbone_std_grads = []
+    branch1_depth_backbone_mean_grads = []
+    branch1_depth_backbone_std_grads = []
+    branch1_aspp_mean_grads = []
+    branch1_aspp_std_grads = []
+    branch1_depth_aspp_mean_grads = []
+    branch1_depth_aspp_std_grads = []
+    branch1_depth_e3_mean_grads = []
+    branch1_depth_e3_std_grads = []
+    branch1_depth_e1_mean_grads = []
+    branch1_depth_e1_std_grads = []
+    branch1_last_conv_mean_grads = []
+    branch1_last_conv_std_grads = []
+    branch1_classifier_mean_grads = []
+    branch1_classifier_std_grads = []
 
     for name, params in model.named_parameters():
         if name.startswith('branch1.backbone'):
-            backbone_mean.append(params.data.mean().cpu())
-            backbone_std.append(params.data.std().cpu())
+            branch1_backbone_mean.append(params.data.mean().cpu())
+            branch1_backbone_std.append(params.data.std().cpu())
+            branch1_backbone_mean_grads.append(params.grad.mean().cpu())
+            branch1_backbone_std_grads.append(params.grad.std().cpu())
+        
         if embeddings:
-
             if name.startswith('branch1.head.e3_conv'):
-                depth_e3_mean.append(params.data.mean().cpu())
-                depth_e3_std.append(params.data.std()).cpu()
+                branch1_depth_e3_mean.append(params.data.mean().cpu())
+                branch1_depth_e3_std.append(params.data.std().cpu())
+                branch1_depth_e3_mean_grads.append(params.grad.mean().cpu())
+                branch1_depth_e3_std_grads.append(params.grad.std().cpu())
             if name.startswith('branch1.head.e1_conv'):
-                depth_e1_mean.append(params.data.mean().cpu())
-                depth_e1_std.append(params.data.std().cpu())
+                branch1_depth_e1_mean.append(params.data.mean().cpu())
+                branch1_depth_e1_std.append(params.data.std().cpu())
+                branch1_depth_e1_mean_grads.append(params.grad.mean().cpu())
+                branch1_depth_e1_std_grads.append(params.grad.std().cpu())
         else:
             if name.startswith('branch1.depth_backbone'):
-                depth_backbone_mean.append(params.data.mean().cpu())
-                depth_backbone_std.append(params.data.std().cpu())
+                branch1_depth_backbone_mean.append(params.data.mean().cpu())
+                branch1_depth_backbone_std.append(params.data.std().cpu())
+                branch1_depth_backbone_mean_grads.append(params.grad.mean().cpu())
+                branch1_depth_backbone_std_grads.append(params.grad.std().cpu())
             if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
-                depth_aspp_mean.append(params.data.mean().cpu())
-                depth_aspp_std.append(params.data.std().cpu())
+                branch1_depth_aspp_mean.append(params.data.mean().cpu())
+                branch1_depth_aspp_std.append(params.data.std().cpu())
+                branch1_depth_aspp_mean_grads.append(params.grad.mean().cpu())
+                branch1_depth_aspp_std_grads.append(params.grad.std().cpu())
         if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
-            aspp_mean.append(params.data.mean().cpu())
-            aspp_std.append(params.data.std().cpu())
+            branch1_aspp_mean.append(params.data.mean().cpu())
+            branch1_aspp_std.append(params.data.std().cpu())
+            branch1_aspp_mean_grads.append(params.grad.mean().cpu())
+            branch1_aspp_std_grads.append(params.grad.std().cpu())
 
+        if name.startswith('branch1.head.last_conv') :
+            branch1_last_conv_mean.append(params.data.mean().cpu())
+            branch1_last_conv_std.append(params.data.std().cpu())
+            branch1_last_conv_mean_grads.append(params.grad.mean().cpu())
+            branch1_last_conv_std_grads.append(params.grad.std().cpu())
 
-    writer.add_histogram('Image_Weights/Backbone_Mean', np.asarray(backbone_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/Backbone_Std', np.asarray(backbone_std), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Mean', np.asarray(aspp_mean), global_step=step, bins='tensorflow')
-    writer.add_histogram('Image_Weights/ASPP_Std', np.asarray(aspp_std), global_step=step, bins='tensorflow')
+        if name.startswith('branch1.classifier') :
+            branch1_classifier_mean.append(params.data.mean().cpu())
+            branch1_classifier_std.append(params.data.std().cpu())
+            branch1_classifier_mean_grads.append(params.grad.mean().cpu())
+            branch1_classifier_std_grads.append(params.grad.std().cpu())
+
+    writer.add_histogram('Branch1_Image_Weights/Backbone_Mean', np.asarray(branch1_backbone_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Weights/Backbone_Std', np.asarray(branch1_backbone_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Weights/ASPP_Mean', np.asarray(branch1_aspp_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Weights/ASPP_Std', np.asarray(branch1_aspp_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Grads/Backbone_Mean_Grads', np.asarray(branch1_backbone_mean_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Grads/Backbone_Std_Grads', np.asarray(branch1_backbone_std_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Grads/ASPP_Mean_Grads', np.asarray(branch1_aspp_mean_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch1_Image_Grads/ASPP_Std_Grads', np.asarray(branch1_aspp_std_grads), global_step=step, bins='tensorflow')
     
     if embeddings:
-        writer.add_histogram('Depth_Weights/E3_Mean', np.asarray(depth_e3_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E3_Std', np.asarray(depth_e3_std), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Mean', np.asarray(depth_e1_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/E1_Std', np.asarray(depth_e1_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/E3_Mean', np.asarray(branch1_depth_e3_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/E3_Std', np.asarray(branch1_depth_e3_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/E1_Mean', np.asarray(branch1_depth_e1_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/E1_Std', np.asarray(branch1_depth_e1_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/E3_Mean_Grads', np.asarray(branch1_depth_e3_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/E3_Std_Grads', np.asarray(branch1_depth_e3_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/E1_Mean_Grads', np.asarray(branch1_depth_e1_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/E1_Std_Grads', np.asarray(branch1_depth_e1_std_grads), global_step=step, bins='tensorflow')
        
     else:
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Mean', np.asarray(depth_backbone_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_Backbone_Std', np.asarray(depth_backbone_std), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Mean', np.asarray(depth_aspp_mean), global_step=step, bins='tensorflow')
-        writer.add_histogram('Depth_Weights/Depth_ASPP_Std', np.asarray(depth_aspp_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/Depth_Backbone_Mean', np.asarray(branch1_depth_backbone_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/Depth_Backbone_Std', np.asarray(branch1_depth_backbone_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/Depth_ASPP_Mean', np.asarray(branch1_depth_aspp_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Weights/Depth_ASPP_Std', np.asarray(branch1_depth_aspp_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/Depth_Backbone_Mean_Grads', np.asarray(branch1_depth_backbone_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/Depth_Backbone_Std_Grads', np.asarray(branch1_depth_backbone_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/Depth_ASPP_Mean_Grads', np.asarray(branch1_depth_aspp_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Depth_Grads/Depth_ASPP_Std_Grads', np.asarray(branch1_depth_aspp_std_grads), global_step=step, bins='tensorflow')
+
+        writer.add_histogram('Branch1_Last_Conv_Weights/Last_Conv_Mean', np.asarray(branch1_last_conv_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Last_Conv_Weights/Last_Conv_Std', np.asarray(branch1_last_conv_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Last_Conv_Grads/Last_Conv_Mean_Grads', np.asarray(branch1_last_conv_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Last_Conv_Grads/Last_Conv_Std_Grads', np.asarray(branch1_last_conv_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Classifier_Weights/Classifier_Mean', np.asarray(branch1_classifier_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Classifier_Weights/Classifier_Std', np.asarray(branch1_classifier_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Classifier_Grads/Classifier_Mean_Grads', np.asarray(branch1_classifier_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch1_Classifier_Grads/Classifier_Std_Grads', np.asarray(branch1_classifier_std_grads), global_step=step, bins='tensorflow')
+
+    
+    #Weights
+    branch2_backbone_mean = []
+    branch2_backbone_std = []
+    branch2_depth_backbone_mean = []
+    branch2_depth_backbone_std = []
+    branch2_aspp_mean = []
+    branch2_aspp_std = []
+    branch2_depth_aspp_mean = []
+    branch2_depth_aspp_std = []
+    branch2_depth_e3_mean = []
+    branch2_depth_e3_std = []
+    branch2_depth_e1_mean = []
+    branch2_depth_e1_std = []
+    branch2_last_conv_mean = []
+    branch2_last_conv_std = []
+    branch2_classifier_mean = []
+    branch2_classifier_std = []
+    
+    #Gradients
+    branch2_backbone_mean_grads = []
+    branch2_backbone_std_grads = []
+    branch2_depth_backbone_mean_grads = []
+    branch2_depth_backbone_std_grads = []
+    branch2_aspp_mean_grads = []
+    branch2_aspp_std_grads = []
+    branch2_depth_aspp_mean_grads = []
+    branch2_depth_aspp_std_grads = []
+    branch2_depth_e3_mean_grads = []
+    branch2_depth_e3_std_grads = []
+    branch2_depth_e1_mean_grads = []
+    branch2_depth_e1_std_grads = []
+    branch2_last_conv_mean_grads = []
+    branch2_last_conv_std_grads = []
+    branch2_classifier_mean_grads = []
+    branch2_classifier_std_grads = []
+
+    for name, params in model.named_parameters():
+        if name.startswith('branch2.backbone'):
+            branch2_backbone_mean.append(params.data.mean().cpu())
+            branch2_backbone_std.append(params.data.std().cpu())
+            branch2_backbone_mean_grads.append(params.grad.mean().cpu())
+            branch2_backbone_std_grads.append(params.grad.std().cpu())
+        
+        if embeddings:
+            if name.startswith('branch2.head.e3_conv'):
+                branch2_depth_e3_mean.append(params.data.mean().cpu())
+                branch2_depth_e3_std.append(params.data.std().cpu())
+                branch2_depth_e3_mean_grads.append(params.grad.mean().cpu())
+                branch2_depth_e3_std_grads.append(params.grad.std().cpu())
+            if name.startswith('branch2.head.e1_conv'):
+                branch2_depth_e1_mean.append(params.data.mean().cpu())
+                branch2_depth_e1_std.append(params.data.std().cpu())
+                branch2_depth_e1_mean_grads.append(params.grad.mean().cpu())
+                branch2_depth_e1_std_grads.append(params.grad.std().cpu())
+        else:
+            if name.startswith('branch2.depth_backbone'):
+                branch2_depth_backbone_mean.append(params.data.mean().cpu())
+                branch2_depth_backbone_std.append(params.data.std().cpu())
+                branch2_depth_backbone_mean_grads.append(params.grad.mean().cpu())
+                branch2_depth_backbone_std_grads.append(params.grad.std().cpu())
+            if name.startswith('branch2.head.aspp.depth_map_convs') or name.startswith('branch1.head.aspp.depth_downsample') or name.startswith('branch1.aspp.pool_depth'):
+                branch2_depth_aspp_mean.append(params.data.mean().cpu())
+                branch2_depth_aspp_std.append(params.data.std().cpu())
+                branch2_depth_aspp_mean_grads.append(params.grad.mean().cpu())
+                branch2_depth_aspp_std_grads.append(params.grad.std().cpu())
+        if name.startswith('branch2.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
+            branch2_aspp_mean.append(params.data.mean().cpu())
+            branch2_aspp_std.append(params.data.std().cpu())
+            branch2_aspp_mean_grads.append(params.grad.mean().cpu())
+            branch2_aspp_std_grads.append(params.grad.std().cpu())
+
+        if name.startswith('branch2.head.last_conv') :
+            branch2_last_conv_mean.append(params.data.mean().cpu())
+            branch2_last_conv_std.append(params.data.std().cpu())
+            branch2_last_conv_mean_grads.append(params.grad.mean().cpu())
+            branch2_last_conv_std_grads.append(params.grad.std().cpu())
+
+        if name.startswith('branch2.classifier') :
+            branch2_classifier_mean.append(params.data.mean().cpu())
+            branch2_classifier_std.append(params.data.std().cpu())
+            branch2_classifier_mean_grads.append(params.grad.mean().cpu())
+            branch2_classifier_std_grads.append(params.grad.std().cpu())
+
+
+    writer.add_histogram('Branch2_Image_Weights/Backbone_Mean', np.asarray(branch2_backbone_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Weights/Backbone_Std', np.asarray(branch2_backbone_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Weights/ASPP_Mean', np.asarray(branch2_aspp_mean), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Weights/ASPP_Std', np.asarray(branch2_aspp_std), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Grads/Backbone_Mean_Grads', np.asarray(branch2_backbone_mean_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Grads/Backbone_Std_Grads', np.asarray(branch2_backbone_std_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Grads/ASPP_Mean_Grads', np.asarray(branch2_aspp_mean_grads), global_step=step, bins='tensorflow')
+    writer.add_histogram('Branch2_Image_Grads/ASPP_Std_Grads', np.asarray(branch2_aspp_std_grads), global_step=step, bins='tensorflow')
+    
+    if embeddings:
+        writer.add_histogram('Branch2_Depth_Weights/E3_Mean', np.asarray(branch2_depth_e3_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/E3_Std', np.asarray(branch2_depth_e3_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/E1_Mean', np.asarray(branch2_depth_e1_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/E1_Std', np.asarray(branch2_depth_e1_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/E3_Mean_Grads', np.asarray(branch2_depth_e3_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/E3_Std_Grads', np.asarray(branch2_depth_e3_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/E1_Mean_Grads', np.asarray(branch2_depth_e1_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/E1_Std_Grads', np.asarray(branch2_depth_e1_std_grads), global_step=step, bins='tensorflow')
+       
+    else:
+        writer.add_histogram('Branch2_Depth_Weights/Depth_Backbone_Mean', np.asarray(branch2_depth_backbone_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/Depth_Backbone_Std', np.asarray(branch2_depth_backbone_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/Depth_ASPP_Mean', np.asarray(branch2_depth_aspp_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Weights/Depth_ASPP_Std', np.asarray(branch2_depth_aspp_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/Depth_Backbone_Mean_Grads', np.asarray(branch2_depth_backbone_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/Depth_Backbone_Std_Grads', np.asarray(branch2_depth_backbone_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/Depth_ASPP_Mean_Grads', np.asarray(branch2_depth_aspp_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Depth_Grads/Depth_ASPP_Std_Grads', np.asarray(branch2_depth_aspp_std_grads), global_step=step, bins='tensorflow')
+
+        writer.add_histogram('Branch2_Last_Conv_Weights/Last_Conv_Mean', np.asarray(branch2_last_conv_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Last_Conv_Weights/Last_Conv_Std', np.asarray(branch2_last_conv_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Last_Conv_Grads/Last_Conv_Mean_Grads', np.asarray(branch2_last_conv_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Last_Conv_Grads/Last_Conv_Std_Grads', np.asarray(branch2_last_conv_std_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Classifier_Weights/Classifier_Mean', np.asarray(branch2_classifier_mean), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Classifier_Weights/Classifier_Std', np.asarray(branch2_classifier_std), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Classifier_Grads/Classifier_Mean_Grads', np.asarray(branch2_classifier_mean_grads), global_step=step, bins='tensorflow')
+        writer.add_histogram('Branch2_Classifier_Grads/Classifier_Std_Grads', np.asarray(branch2_classifier_std_grads), global_step=step, bins='tensorflow')
 
 
 def compute_metric(results):

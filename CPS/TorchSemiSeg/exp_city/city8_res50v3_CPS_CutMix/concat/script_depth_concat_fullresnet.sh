@@ -5,7 +5,7 @@ export NGPUS=1
 export learning_rate=0.002
 export batch_size=2
 export snapshot_iter=2
-export epochs=35
+export epochs=40
 export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
@@ -13,6 +13,7 @@ export mode="Concat-Semi-Supervision-FullResnet"
 export debug="False"
 export full_depth_resnet="True"
 export load_checkpoint="True"
+export depth_only="True"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'
