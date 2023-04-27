@@ -123,11 +123,6 @@ def plot_grads(model, step, writer, embeddings=False):
             if config.depth_only == False:
                 branch1_backbone_mean_grads.append(params.grad.mean().cpu())
                 branch1_backbone_std_grads.append(params.grad.std().cpu())
-        
-        if name.startswith('branch1.head.aspp.depth_red_conv'):
-            branch1_depth_aspp_mean_grads.append(params.grad.mean().cpu())
-            branch1_depth_aspp_std_grads.append(params.grad.std().cpu())
-            branch1_aspp_std_grads.append(params.grad.std().cpu())
 
         if name.startswith('branch1.head.aspp.map_convs') or name.startswith('branch1.head.aspp.pool_u2pl'):
             branch1_aspp_mean.append(params.data.mean().cpu())
@@ -153,7 +148,7 @@ def plot_grads(model, step, writer, embeddings=False):
                 branch1_depth_backbone_std.append(params.data.std().cpu())
                 branch1_depth_backbone_mean_grads.append(params.grad.mean().cpu())
                 branch1_depth_backbone_std_grads.append(params.grad.std().cpu())
-            if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.aspp.pool_depth'):
+            if name.startswith('branch1.head.aspp.depth_map_convs') or name.startswith('branch1.aspp.pool_depth') or name.startswith('branch1.head.aspp.depth_red_conv'):
                 branch1_depth_aspp_mean.append(params.data.mean().cpu())
                 branch1_depth_aspp_std.append(params.data.std().cpu())
                 branch1_depth_aspp_mean_grads.append(params.grad.mean().cpu())
@@ -272,7 +267,7 @@ def plot_grads(model, step, writer, embeddings=False):
                 branch2_depth_backbone_std.append(params.data.std().cpu())
                 branch2_depth_backbone_mean_grads.append(params.grad.mean().cpu())
                 branch2_depth_backbone_std_grads.append(params.grad.std().cpu())
-            if name.startswith('branch2.head.aspp.depth_map_convs') or name.startswith('branch2.aspp.pool_depth'):
+            if name.startswith('branch2.head.aspp.depth_map_convs') or name.startswith('branch2.aspp.pool_depth') or name.startswith('branch2.head.aspp.depth_red_conv'):
                 branch2_depth_aspp_mean.append(params.data.mean().cpu())
                 branch2_depth_aspp_std.append(params.data.std().cpu())
                 branch2_depth_aspp_mean_grads.append(params.grad.mean().cpu())
@@ -800,15 +795,15 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                if step % 500 == 0:
-                    viz_image(
-                        imgs,
-                        gts,
-                        sup_pred_l,
-                        step,
-                        epoch,
-                        minibatch['fn'][0],
-                        None)
+                # if step % 500 == 0:
+                #     viz_image(
+                #         imgs,
+                #         gts,
+                #         sup_pred_l,
+                #         step,
+                #         epoch,
+                #         minibatch['fn'][0],
+                #         None)
                 
                 if step % 1000 == 0:
                     plot_grads(model, step, logger)
@@ -946,25 +941,25 @@ with Engine(custom_parser=parser) as engine:
                             'correct': correct_tmp}
                         all_results.append(results_dict)
 
-                        if epoch + 1 > 20:
-                            if step_test % 50 == 0:
-                                viz_image(
-                                    imgs_test,
-                                    gts_test,
-                                    pred_test,
-                                    step,
-                                    epoch,
-                                    batch_test['fn'][0],
-                                    step_test)
-                        elif step_test % 50 == 0:
-                            viz_image(
-                                imgs_test,
-                                gts_test,
-                                pred_test,
-                                step,
-                                epoch,
-                                batch_test['fn'][0],
-                                step_test)
+                        # if epoch + 1 > 20:
+                        #     if step_test % 50 == 0:
+                        #         viz_image(
+                        #             imgs_test,
+                        #             gts_test,
+                        #             pred_test,
+                        #             step,
+                        #             epoch,
+                        #             batch_test['fn'][0],
+                        #             step_test)
+                        # elif step_test % 50 == 0:
+                        #     viz_image(
+                        #         imgs_test,
+                        #         gts_test,
+                        #         pred_test,
+                        #         step,
+                        #         epoch,
+                        #         batch_test['fn'][0],
+                        #         step_test)
 
                 if engine.local_rank == 0:
                     iu, mean_IU, _, mean_pixel_acc = compute_metric(
