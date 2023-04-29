@@ -44,6 +44,35 @@ import time
 import uuid
 import os
 
+image_layer_tuple = (
+    "branch1.backbone",
+    "branch1.head.reduce",
+    "branch1.head.aspp.map_convs",
+    "branch1.head.aspp.pool_u2pl",
+    "branch1.head.aspp.red_conv",
+    "branch2.backbone",
+    "branch2.head.reduce",
+    "branch2.head.aspp.map_convs",
+    "branch2.head.aspp.pool_u2pl",
+    "branch2.head.aspp.red_conv",
+)
+
+depth_layer_tuple = (
+    "branch1.depth_backbone",
+    "branch1.head.depth_reduce",
+    # "branch1.head.last_conv",
+    "branch1.head.aspp.depth_map_convs",
+    "branch1.head.aspp.pool_depth",
+    "branch1.head.aspp.depth_red_conv",
+    "branch1.classifier",       #may need removal
+    "branch2.depth_backbone",
+    "branch2.head.depth_reduce",
+    # "branch2.head.last_conv",
+    "branch2.head.aspp.depth_map_convs",
+    "branch2.head.aspp.pool_depth",
+    "branch2.head.aspp.depth_red_conv",
+    "branch2.classifier",       #may need removal
+)
 
 '''NEEED TO UPDATE VALIDATION AND EVAL FILE AND VAL PRE ETC TO INCLIDE DEPTH VALUES AND NEW FUNCTIONS'''
 
@@ -486,23 +515,47 @@ with Engine(custom_parser=parser) as engine:
                 BatchNorm2d, config.bn_eps, config.bn_momentum,
                 mode='fan_in', nonlinearity='relu')
 
+    #Loading image layers
     if config.load_checkpoint:
-        state_dict = torch.load(config.checkpoint_path)
-        
+        image_state_dict = torch.load(config.checkpoint_path)
+        image_layers_loaded = []
         own_state = model.state_dict()
-        print(own_state['branch1.classifier.bias'].data, state_dict['model']['branch1.classifier.bias'].data)
-        for name, param in state_dict['model'].items():
-            if (name not in own_state) or name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+        print(own_state['branch1.classifier.bias'].data, image_state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in image_state_dict['model'].items():
+            if (name in own_state) and name.startswith(image_layer_tuple):#('branch1.head.depth') or name.startswith('branch2.head.last_conv'):
+                param = param.data
+                own_state[name].copy_(param)
+                image_layers_loaded.append(name)
+            else:
+                continue
+        #if isinstance(para
+        print('Image layers loaded: ', image_layers_loaded)
+        print('Should be different to verify depth classifier loaded', model.branch1.classifier.bias.data, image_state_dict['model']['branch1.classifier.bias'].data)
+
+        print('Image Checkpoint loaded: ', config.checkpoint_path)
+    else:
+        print('No Image Checkpont Loaded')
+
+    #Loading depth layers
+    if config.load_depth_checkpoint:
+        depth_state_dict = torch.load(config.depth_checkpoint_path)
+        depth_layers_loaded = []
+        own_state = model.state_dict()
+        print(own_state['branch1.classifier.bias'].data, depth_state_dict['model']['branch1.classifier.bias'].data)
+        for name, param in depth_state_dict['model'].items():
+            if (name in own_state) and name.startswith(depth_layer_tuple): #name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
+                param = param.data
+                own_state[name].copy_(param)
+                depth_layers_loaded.append(name)
+            else:
                 continue
         #if isinstance(param, Parameter): # backwards compatibility for serialized parameters
-            param = param.data
-            own_state[name].copy_(param)
-        
-        print('Should be same to verify model loaded', model.branch1.classifier.bias.data, state_dict['model']['branch1.classifier.bias'].data)
+        print('depth layers loaded: ', depth_layers_loaded)
+        print('Should be same to verify model loaded', model.branch1.classifier.bias.data, depth_state_dict['model']['branch1.classifier.bias'].data)
 
-        print('Checkpoint loaded: ', config.checkpoint_path)
+        print('Depth Checkpoint loaded: ', config.depth_checkpoint_path)
     else:
-        print('No Checkpont Loaded')
+        print('No Depth Checkpont Loaded')
 
     data_setting = {'img_root': config.img_root_folder,
                     'gt_root': config.gt_root_folder,
@@ -795,15 +848,15 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                # if step % 500 == 0:
-                #     viz_image(
-                #         imgs,
-                #         gts,
-                #         sup_pred_l,
-                #         step,
-                #         epoch,
-                #         minibatch['fn'][0],
-                #         None)
+                if step % 500 == 0:
+                    viz_image(
+                        imgs,
+                        gts,
+                        sup_pred_l,
+                        step,
+                        epoch,
+                        minibatch['fn'][0],
+                        None)
                 
                 if step % 1000 == 0:
                     plot_grads(model, step, logger)
@@ -941,25 +994,25 @@ with Engine(custom_parser=parser) as engine:
                             'correct': correct_tmp}
                         all_results.append(results_dict)
 
-                        # if epoch + 1 > 20:
-                        #     if step_test % 50 == 0:
-                        #         viz_image(
-                        #             imgs_test,
-                        #             gts_test,
-                        #             pred_test,
-                        #             step,
-                        #             epoch,
-                        #             batch_test['fn'][0],
-                        #             step_test)
-                        # elif step_test % 50 == 0:
-                        #     viz_image(
-                        #         imgs_test,
-                        #         gts_test,
-                        #         pred_test,
-                        #         step,
-                        #         epoch,
-                        #         batch_test['fn'][0],
-                        #         step_test)
+                        if epoch + 1 > 20:
+                            if step_test % 50 == 0:
+                                viz_image(
+                                    imgs_test,
+                                    gts_test,
+                                    pred_test,
+                                    step,
+                                    epoch,
+                                    batch_test['fn'][0],
+                                    step_test)
+                        elif step_test % 50 == 0:
+                            viz_image(
+                                imgs_test,
+                                gts_test,
+                                pred_test,
+                                step,
+                                epoch,
+                                batch_test['fn'][0],
+                                step_test)
 
                 if engine.local_rank == 0:
                     iu, mean_IU, _, mean_pixel_acc = compute_metric(

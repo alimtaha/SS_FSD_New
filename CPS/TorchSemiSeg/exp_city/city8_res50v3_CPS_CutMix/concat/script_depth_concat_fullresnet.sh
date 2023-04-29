@@ -13,7 +13,11 @@ export mode="Concat-Semi-Supervision-FullResnet"
 export debug="False"
 export full_depth_resnet="True"
 export load_checkpoint="True"
-export depth_only="True"
+export load_depth_checkpoint="True"
+export depth_only="False"
+
+export checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/Semi-Supervision_Ratio16_22-Apr_21-23-nodebs2-tep35-lr0.002-maxdepth80_newcrfs/epoch-best_loss.pth"
+export depth_checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/Concat-Semi-Supervision-FullResnet_Ratio16_DepthOnly_Pretrained-True_27-Apr_14-17-nodebs2-tep40-lr0.002-maxdepth80_newcrfs/epoch-best_loss.pth"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'

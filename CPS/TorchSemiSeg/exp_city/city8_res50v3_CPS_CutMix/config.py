@@ -44,9 +44,6 @@ else:
     else:
         C.volna = '/home/extraspace/Datasets/Datasets/cityscapes/city'
 
-for name, value, in os.environ.items():
-    print(name, ' : ', value)
-
 """please config ROOT_dir and user when u first using"""
 C.repo_name = 'TorchSemiSeg'
 C.abs_dir = osp.realpath(".")
@@ -182,25 +179,36 @@ C.embed_every = C.validate_every*4
 C.mode = os.environ['mode'] + '_Ratio' + os.environ['ratio']         
 
 C.depth_ckpt = 'newcrfs_80.0_model-44982-best_d1_0.95066/'
-C.checkpoint_path = '/mnt/Dataset/Logs/SSL/CPS/Semi/Semi-Supervision_Ratio16_22-Apr_21-23-nodebs2-tep35-lr0.002-maxdepth80_newcrfs/epoch-best_loss.pth'
 C.max_d = 80 if C.depth_ckpt == 'newcrfs_80.0_model-44982-best_d1_0.95066/' else 256
 
 if os.getenv('load_checkpoint') is not None:
     if str(os.environ['load_checkpoint']) == 'True':
         C.load_checkpoint = True
+        C.checkpoint_path = str(os.environ['checkpoint_path'])
+        image_pretrain_str = '_ImagePretrained_'
     else:
         C.load_checkpoint = False
+        image_pretrain_str = ''
+
+if os.getenv('load_depth_checkpoint') is not None:
+    if str(os.environ['load_depth_checkpoint']) == 'True':
+        C.load_depth_checkpoint = True
+        C.depth_checkpoint_path = str(os.environ['depth_checkpoint_path'])
+        depth_pretrain_str = '_DepthPretrained_'
+    else:
+        C.load_depth_checkpoint = False
+        depth_pretrain_str = ''
 
 if os.getenv('depth_only') is not None:
     if str(os.environ['depth_only']) == 'True':
         C.depth_only = True
-        depth_only_str = 'DepthOnly_'
+        depth_only_str = '_DepthOnly_'
     else:
         C.depth_only = False
         depth_only_str = ''
 
 run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}-maxdepth{C.max_d}_{C.depth_ckpt.split('_')[0]}"
-name = f"{C.mode}_{depth_only_str}Pretrained-{C.load_checkpoint}_{run_id}"
+name = f"{C.mode}_{depth_only_str}{image_pretrain_str}{depth_pretrain_str}{run_id}"
 
 C.log_dir = os.path.join(os.environ['snapshot_dir'], name)
 C.tb_dir = C.log_dir
@@ -262,3 +270,13 @@ C.unsup_source_1 = osp.join(
 C.eval_source = osp.join(C.dataset_path, "config_new/val.txt")
 C.test_source = osp.join(C.dataset_path, "config_new/test.txt")
 C.demo_source = osp.join(C.dataset_path, "config_new/demo.txt")
+
+print('=='*5, 'Current Training Config', '=='*5)
+print('=='*5, 'Depth Only: ', C.depth_only ,'=='*5)
+print('=='*5, 'Full Depth ResNet: ', str(os.environ['full_depth_resnet']) ,'=='*5)
+print('=='*5, 'Image Pretrained: ', C.load_checkpoint ,'=='*5)
+if C.load_checkpoint:
+    print('=='*5, 'Image Checkpoint Path: ', C.checkpoint_path ,'=='*5)
+print('=='*5, 'Depth Pretrained: ', C.load_depth_checkpoint ,'=='*5)
+if C.load_depth_checkpoint:
+    print('=='*5, 'Depth Checkpoint Path: ', C.depth_checkpoint_path ,'=='*5)
