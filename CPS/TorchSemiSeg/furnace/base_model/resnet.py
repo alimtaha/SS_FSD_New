@@ -1,7 +1,12 @@
 import functools
 import torch.nn as nn
+import os
+import sys
+
+sys.path.append('/home/ubuntu/SS_FSD_New/SS_FSD_New/CPS/TorchSemiSeg/furnace')
 
 from utils.pyt_utils import load_model
+
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',

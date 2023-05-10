@@ -39,7 +39,7 @@ def compute_score(hist, correct, labeled):
     # in this histogram, the images on the columns are the predictions,
     # whereas the images on the rows are the ground truth
     # hist.sum(1) and hist.sum(0) give you false positives and negatives, it's
-    # a confousion matrix (however you then need to subtract all the diagnial
+    # a confusion matrix (however you then need to subtract all the diagnial
     # pixels since those are true positives)
     mean_IU = np.nanmean(iu)
     # this is just the mean iou exlcuding the first class (road in this case)
@@ -50,6 +50,28 @@ def compute_score(hist, correct, labeled):
 
     return iu, mean_IU, mean_IU_no_back, mean_pixel_acc
 
+def recall_and_precision_all(pred, gt, n_cl):
+    assert (pred.shape == gt.shape)
+    k = (gt >= 0) & (gt < n_cl)  # return boolean array where all conditions matched are true and others as false? same size as gt - done to not take into account the ignore ondex as seen below with the labelled sum
+    print(k.shape)
+    # k is a list of length 1024, where every element is a list of length
+    # 2048, it is effectively as 1024 x 2048 array (in the case of whole image
+    # eval)
+    precision = [0] * n_cl
+    recall = [0] * n_cl
+    mean_prec = 0
+    mean_recall = 0
+    for i in range(n_cl):
+        tp = np.sum((pred[k] == i) & (gt[k] == i))
+        fp = np.sum((pred[k] == i) & (gt[k] != i))
+        #tn = np.sum((pred[k] != i) & (gt[k] != i))
+        fn = np.sum((pred[k] != i) & (gt[k] == i))
+        # to avoid NaNs if class doesn't exist in picture or not classified
+        recall[i] = tp / ((tp + fn) + 1e-10)
+        precision[i] = tp / ((tp + fp) + 1e-10)
+    mean_prec = np.nanmean(precision)
+    mean_recall = np.nanmean(recall)
+    return precision, mean_prec, recall, mean_recall
 
 def recall_and_precision(pred, gt, n_cl):
     assert (pred.shape == gt.shape)

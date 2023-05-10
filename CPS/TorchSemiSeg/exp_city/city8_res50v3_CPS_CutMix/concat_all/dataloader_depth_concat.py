@@ -10,7 +10,9 @@ import torch
 import cv2
 import os
 import sys
-sys.path.append('../../../')
+for n in range(1, 4):
+    m = '../'
+    sys.path.append(m * n)
 
 '''
 Functions below called by dataloader for transformations like:
@@ -136,10 +138,10 @@ class TrainPre(
         if gt is not None:
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, 100)
+            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, config.ignore_label)
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, 100)
+            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, config.ignore_label)
         else:
             p_gt = None
             p_cgt = None
@@ -198,7 +200,8 @@ def get_train_loader(
         train_source,
         unsupervised=False,
         collate_fn=None,
-        pin_memory_flag=True):
+        pin_memory_flag=True,
+        fully_supervised=False):
     data_setting = {'img_root': config.img_root_folder,
                     'gt_root': config.gt_root_folder,
                     'train_source': train_source,
@@ -210,8 +213,12 @@ def get_train_loader(
         config.dimage_std)
 
     if unsupervised is False:
-        train_dataset = dataset(data_setting, "train", train_preprocess,
-                                config.max_samples, unsupervised=False)
+        if fully_supervised is False:
+            train_dataset = dataset(data_setting, "train", train_preprocess,
+                                    config.max_samples, unsupervised=False)
+        else:
+            train_dataset = dataset(data_setting, "train", train_preprocess,
+                                    config.num_train_imgs, unsupervised=False)
     else:
         train_dataset = dataset(data_setting, "train", train_preprocess,
                                 config.max_samples, unsupervised=True)
@@ -285,9 +292,20 @@ class CityScape(BaseDataset):
             names = self._file_names[index]
         # - changed to .jpg since images have JPG prefix not PNG, os.path.join(self._img_path, names[0])
         img_path = self._img_path + names[0].split('.')[0] + '.jpg'
-        dpath = self._img_path + 'depth_adabins/' + names[0].split('/')[3]
+        dpath = self._img_path + '/depth_gen/' + config.depth_ckpt + names[0].split('/')[3]
         # os.path.join(self._gt_path, names[1])
         gt_path = self._gt_path + names[1]
+        if config.weak_labels and self._split_name == 'train':
+            names_split = names[1].split('/')
+            subdir = names_split[-1].split('_')[0]
+            #new_list = [names_split[0:2], ]
+            new_names = ('/').join([names_split[1],
+                                    names_split[2], subdir, names_split[3]])
+            gt_path = (self._gt_path + new_names).replace('/segmentation',
+                                                          '/segmentation_weak_0.1').replace('_gtFine', '')
+        else:
+            gt_path = (self._gt_path + names[1])
+
         item_name = names[1].split("/")[-1].split(".")[0]
 
         if not self.unsupervised:
@@ -306,11 +324,11 @@ class CityScape(BaseDataset):
             else:
                 img, dimg, gt, edge_gt, extra_dict = self.preprocess(
                     img, dimg, gt)
-        if gt is not None:
-            for i in range(
-                    1, 19):  # setting all labels apart from road to 1 (ignore label)
-                gt[np.where(gt == i)] = 1
-            gt[np.where(gt == 255)] = 1
+        # if gt is not None:
+        #     for i in range(
+        #             1, 19):  # setting all labels apart from road to 1 (ignore label)
+        #         gt[np.where(gt == i)] = 1
+        #     gt[np.where(gt == 255)] = 1
 
         if dimg is not None:
 
@@ -379,29 +397,20 @@ class CityScape(BaseDataset):
 
     @classmethod
     def get_class_colors(*args):
-
-        # Had to extend to two classes since
-        return [[128, 64, 128], [0, 70, 255]]
-
-        '''
-        , [244, 35, 232], [70, 70, 70],
+        return [[128, 64, 128], [244, 35, 232], [70, 70, 70],
                 [102, 102, 156], [190, 153, 153], [153, 153, 153],
                 [250, 170, 30], [220, 220, 0], [107, 142, 35],
                 [152, 251, 152], [70, 130, 180], [220, 20, 60], [255, 0, 0],
                 [0, 0, 142], [0, 0, 70], [0, 60, 100], [0, 80, 100],
                 [0, 0, 230], [119, 11, 32]]
-        '''
 
     @classmethod
     def get_class_names(*args):
-        return ['road', 'not_road']
-
-        '''
-        , 'sidewalk', 'building', 'wall', 'fence', 'pole',
+        return ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
                 'traffic light', 'traffic sign',
                 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
                 'truck', 'bus', 'train', 'motorcycle', 'bicycle']
-        '''
+
 
     @classmethod
     def transform_label(cls, pred, name):

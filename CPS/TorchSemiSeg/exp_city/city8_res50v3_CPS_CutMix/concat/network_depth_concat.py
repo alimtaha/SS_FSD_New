@@ -58,7 +58,7 @@ class Network(nn.Module):
             depth_only=False,
             **kwargs):
         super(Network, self).__init__()
-        
+
 
         self.branch1 = SingleNetwork(
             num_classes, criterion, norm_layer, pretrained_model, full_depth_resnet=False, depth_only=depth_only)
@@ -361,7 +361,6 @@ class ASPP(nn.Module):
 
     def forward(self, x, d):
         # Map convolutions
-        
         if self.depth_only == False:
             _, _, h, w = x.size()
             out1 = F.interpolate(
@@ -408,7 +407,6 @@ class ASPP(nn.Module):
         # out = out #+ pool
         #out = self.red_bn(out)
         # out = self.leak_relu(out)  # add activation layer        
-
         return out, depth
 
     def _global_pooling(self, x):

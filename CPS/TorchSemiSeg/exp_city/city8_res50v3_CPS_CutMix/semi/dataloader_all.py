@@ -2,18 +2,21 @@ from PIL import Image
 from furnace.utils.visualize import print_iou, show_img
 from furnace.datasets.BaseDataset import BaseDataset
 from furnace.utils.img_utils import generate_random_crop_pos, random_crop_pad_to_shape
-from exp_city.city8_res50v3_CPS_CutMix.config import config as conzeft
+import os
+import sys
+sys.path.append(os.getcwd() + '../../../')
+sys.path.append(os.getcwd() + '../../')
+sys.path.append(os.getcwd() + '../')
+from config import config as config
 import random
 from torch.utils import data
 import numpy as np
 import torch
 import cv2
-import os
-import sys
 
-for n in range(1, 4):
-    m = '../'
-    sys.path.append(m * n)
+
+
+
 
 '''
 Functions below called by dataloader for transformations like:
@@ -26,74 +29,35 @@ Functions below called by dataloader for transformations like:
 '''
 
 
-def normalize(img, mean, std, dimg=None, d_mean=None, d_std=None, embeddings=False):
+def normalize(img, mean, std):
     # pytorch pretrained model need the input range: 0-1
     img = img.astype(np.float32) / 255.0
     img = img - mean
     img = img / std
 
-    if dimg is not None:
-        if embeddings == True:
-            pass
-        else:
-            dimg = dimg.astype(np.float32) / 256.0
-            dimg = dimg - d_mean
-            dimg = dimg / d_std
-
-    return img, dimg
+    return img
 
 
-def random_mirror(img, dimg=None, gt=None, embeddings=False):
+def random_mirror(img, gt=None):
     if random.random() >= 0.5:
         img = cv2.flip(img, 1)
-        if dimg is not None:
-            if embeddings == True:
-                dimg[0] = dimg[0][:, :, ::-1]
-                dimg[1] = dimg[1][:, :, ::-1]
-            else:
-                dimg = cv2.flip(dimg, 1)
         if gt is not None:
             gt = cv2.flip(gt, 1)
 
-    return img, dimg, gt
+    return img, gt
 
 
-def random_scale(img, dimg=None, gt=None, scales=None, embeddings=True):
+def random_scale(img, gt=None, scales=None):
     scale = random.choice(scales)
     # scale = random.uniform(scales[0], scales[-1])
     sh = int(img.shape[0] * scale)
     sw = int(img.shape[1] * scale)
     img = cv2.resize(img, (sw, sh), interpolation=cv2.INTER_LINEAR)
 
-    print('random scale image size', img.shape)
-
-
-    if dimg is not None:
-        if embeddings == True:
-            
-            #1/16th image size
-            C, H, W = dimg[0].shape
-            dimg[0] = torch.from_numpy(np.copy(dimg[0]))
-            dimg[0] = torch.nn.functional.interpolate(dimg[0], (C, int(H * scale), int(W * scale)), mode='bilinear').numpy()
-
-            #1/4th image size
-            C, H, W = dimg[1].shape
-
-
-            dimg[1] = torch.from_numpy(np.copy(dimg[1]))
-            dimg[1] = torch.nn.functional.interpolate(dimg[1], (C, int(H * scale), int(W * scale)), mode='bilinear').numpy()
-            
-
-        else:
-            # This may not work, so may need to be changed!!!
-            dimg = cv2.resize(dimg, (sw, sh), interpolation=cv2.INTER_NEAREST)
-
     if gt is not None:
         gt = cv2.resize(gt, (sw, sh), interpolation=cv2.INTER_NEAREST)
 
-    print('after resize', img.shape)
-
-    return img, dimg, gt, scale
+    return img, gt, scale
 
 
 def SemanticEdgeDetector(gt):
@@ -125,68 +89,47 @@ def SemanticEdgeDetector(gt):
 
 class TrainPre(
         object):  # This class preprocesses the images using the functions above for TRAINING only
-    def __init__(self, img_mean, img_std, dimage_mean=None, dimage_std=None):
+    def __init__(self, img_mean, img_std):
         self.img_mean = img_mean
         self.img_std = img_std
-        self.dimg_mean = dimage_mean
-        self.dimg_std = dimage_std
 
-    def __call__(
-            self,
-            img,
-            dimg=None,
-            gt=None,
-            unsupervised=False,
-            uns_crops=None,
-            embeddings=False):
+    def __call__(self, img, gt=None):
         # gt = gt - 1     # label 0 is invalid, this operation transfers label
         # 0 to label 255
-        img, dimg, gt = random_mirror(img, dimg, gt, embeddings=True)
-        if conzeft.train_scale_array is not None:
-            img, dimg, gt, scale = random_scale(
-                img, dimg, gt, conzeft.train_scale_array, embeddings=True)
+        img, gt = random_mirror(img, gt)
+        if config.train_scale_array is not None:
+            img, gt, scale = random_scale(img, gt, config.train_scale_array)
 
         # Need to experiment with whether using mean and std dev for the depth
         # images adds value
-        img, dimg = normalize(
-            img, self.img_mean, self.img_std, dimg, self.dimg_mean, self.dimg_std, embeddings=True)
+        img = normalize(img, self.img_mean, self.img_std)
 
         if gt is not None:
             cgt = SemanticEdgeDetector(gt)
         else:
             cgt = None
 
-        crop_size = (conzeft.image_height, conzeft.image_width)
-
-        if unsupervised and conzeft.depthmix:
-            crop_pos = uns_crops
-
-        else:
-            crop_pos = generate_random_crop_pos(img.shape[:2], crop_size)
+        crop_size = (config.image_height, config.image_width)
+        crop_pos = generate_random_crop_pos(img.shape[:2], crop_size)
 
         p_img, _ = random_crop_pad_to_shape(img, crop_pos, crop_size, 0)
         if gt is not None:
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, conzeft.ignore_label)
+            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, config.ignore_label)
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, conzeft.ignore_label)
+            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, config.ignore_label)
         else:
             p_gt = None
             p_cgt = None
-
-        if dimg is not None:
-            p_dimg, _ = random_crop_pad_to_shape(dimg, crop_pos, crop_size, 0, embeddings=True)
-        else:
-            p_dimg = None
 
         # colour channel moved to first dimension (from H x W x C to C x H x W)
         p_img = p_img.transpose(2, 0, 1)
 
         extra_dict = {}
 
-        return p_img, p_dimg, p_gt, p_cgt, extra_dict
+        return p_img, p_gt, p_cgt, extra_dict
 
 
 class ValPre(object):  # Validation runs pre processing
@@ -197,19 +140,16 @@ class ValPre(object):  # Validation runs pre processing
 
 
 class TrainValPre(object):  # Validation while Training runs pre processing
-    def __init__(self, img_mean, img_std, dimage_mean=None, dimage_std=None):
+    def __init__(self, img_mean, img_std):
         self.img_mean = img_mean
         self.img_std = img_std
-        self.dimg_mean = dimage_mean
-        self.dimg_std = dimage_std
 
-    def __call__(self, img, dimg=None, gt=None, embeddings=False):
-        img, dimg = normalize(
-            img, self.img_mean, self.img_std, dimg, self.dimg_mean, self.dimg_std, embeddings=True)
+    def __call__(self, img, gt=None):
+        img = normalize(img, self.img_mean, self.img_std,)
         img = img.transpose(2, 0, 1)
         # gt = gt - 1
         extra_dict = {}
-        return img, dimg, gt, None, extra_dict
+        return img, gt, None, extra_dict  # None is placeholder for cgt
 
 
 '''
@@ -230,45 +170,40 @@ def get_train_loader(
         train_source,
         unsupervised=False,
         collate_fn=None,
-        pin_memory_flag=True,
         fully_supervised=False):
-    data_setting = {'img_root': conzeft.img_root_folder,
-                    'gt_root': conzeft.gt_root_folder,
+    data_setting = {'img_root': config.img_root_folder,
+                    'gt_root': config.gt_root_folder,
                     'train_source': train_source,
-                    'eval_source': conzeft.eval_source}
-    train_preprocess = TrainPre(
-        conzeft.image_mean,
-        conzeft.image_std,
-        conzeft.dimage_mean,
-        conzeft.dimage_std)
+                    'eval_source': config.eval_source}
+    train_preprocess = TrainPre(config.image_mean, config.image_std)
 
     if unsupervised is False:
         if fully_supervised is False:
             train_dataset = dataset(data_setting, "train", train_preprocess,
-                                    conzeft.max_samples, unsupervised=False)
+                                    config.max_samples, unsupervised=False)
         else:
             train_dataset = dataset(data_setting, "train", train_preprocess,
-                                    conzeft.num_train_imgs, unsupervised=False)
+                                    config.num_train_imgs, unsupervised=False)
     else:
         train_dataset = dataset(data_setting, "train", train_preprocess,
-                                conzeft.max_samples, unsupervised=True)
+                                config.max_samples, unsupervised=True)
 
     train_sampler = None
     is_shuffle = True
-    batch_size = conzeft.batch_size
+    batch_size = config.batch_size
 
     if engine.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset)
-        batch_size = conzeft.batch_size // engine.world_size
+        batch_size = config.batch_size // engine.world_size
         is_shuffle = False
 
     train_loader = data.DataLoader(train_dataset,
                                    batch_size=batch_size,
-                                   num_workers=conzeft.num_workers,
+                                   num_workers=config.num_workers,
                                    drop_last=True,
                                    shuffle=is_shuffle,
-                                   pin_memory=pin_memory_flag,
+                                   pin_memory=True,
                                    sampler=train_sampler,
                                    collate_fn=collate_fn)
 
@@ -282,15 +217,8 @@ class CityScape(BaseDataset):
 
     trans_labels = [7, 35]  # 35 is random label used as non road label
 
-    def __init__(
-            self,
-            setting,
-            split_name,
-            preprocess=None,
-            file_length=None,
-            training=True,
-            unsupervised=False,
-            uns_crops=None):
+    def __init__(self, setting, split_name, preprocess=None,
+                 file_length=None, training=True, unsupervised=False):
         super(
             CityScape,
             self).__init__(
@@ -304,13 +232,12 @@ class CityScape(BaseDataset):
         self._train_source = setting['train_source']
         self._eval_source = setting['eval_source']
         self._file_names = self._get_file_names(split_name)
-        self._file_length = file_length  # file_length here is the conzeft.max_samples
+        self._file_length = file_length  # file_length here is the config.max_samples
         # Train and Val preprocess classes above, passed in by the DataLoader
         # when it calls the dataset
         self.preprocess = preprocess
         self.training = training
         self.unsupervised = unsupervised
-        self.uns_crops = uns_crops          #used to maintain depth mix crops
 
     def __getitem__(self, index):
         if self._file_length is not None:
@@ -320,12 +247,16 @@ class CityScape(BaseDataset):
         else:
             names = self._file_names[index]
         # - changed to .jpg since images have JPG prefix not PNG, os.path.join(self._img_path, names[0])
+        
+        #Only needed if using leftImg8bit folder
+        #city_name = names[0].split('/')[-1].split('_')[0]
+        #new_path = names[0].split('/')[-2:].replace('/train/', '/train/' + city_name + '/').replace('.jpg', '.png')
+        #img_path = self._img_path + new_path
+
         img_path = self._img_path + names[0].split('.')[0] + '.jpg'
-        e3_path = self._img_path + '/depth_gen/' + conzeft.depth_ckpt + 'embeddings/' + names[0].split('/')[3] + 'E3.pt'
-        e1_path = self._img_path + '/depth_gen/' + conzeft.depth_ckpt + 'embeddings/' + names[0].split('/')[3] + 'E1.pt'
-        dpath = (e3_path, e1_path)
+        
         # os.path.join(self._gt_path, names[1])
-        if conzeft.weak_labels and self._split_name == 'train':
+        if config.weak_labels:
             names_split = names[1].split('/')
             subdir = names_split[-1].split('_')[0]
             #new_list = [names_split[0:2], ]
@@ -339,31 +270,14 @@ class CityScape(BaseDataset):
         item_name = names[1].split("/")[-1].split(".")[0]
 
         if not self.unsupervised:
-            img, dimg, gt = self._fetch_data(
-                img_path, dpath, gt_path, embeddings=True)  # Image opened using cv2.imread
+            img, gt = self._fetch_data(img_path, gt_path)
         else:
-            img, dimg, gt = self._fetch_data(img_path, dpath, None, embeddings=True)
+            img, gt = self._fetch_data(img_path, None)
 
         img = img[:, :, ::-1]  # flip third dimension
 
         if self.preprocess is not None:
-            if self._split_name == 'train':
-                img, dimg, gt, edge_gt, extra_dict = self.preprocess(
-                    img, dimg, gt, self.unsupervised, uns_crops=(
-                        self.uns_crops[index] if self.unsupervised and conzeft.depthmix else None), embeddings=True)
-            else:
-                img, dimg, gt, edge_gt, extra_dict = self.preprocess(
-                    img, dimg, gt, embeddings=True)
-        if gt is not None:
-            for i in range(
-                    1, 19):  # setting all labels apart from road to 1 (ignore label)
-                gt[np.where(gt == i)] = 1
-            gt[np.where(gt == 255)] = 1
-
-        # if dimg is not None:
-        #     dimg = dimg[np.newaxis, ...]
-        #     # Appending depth to last dimension
-        #     #img = np.concatenate((img, dimg), axis=0)
+            img, gt, edge_gt, extra_dict = self.preprocess(img, gt)
 
         if self._split_name in [
             'train',
@@ -372,8 +286,6 @@ class CityScape(BaseDataset):
             'trainval_aug']:
             # image converted to torch array
             img = torch.from_numpy(np.ascontiguousarray(img)).float()
-            dimg = (torch.from_numpy(dimg[0].copy()), torch.from_numpy(dimg[1].copy()))
-            
             if gt is not None:
                 # contiguous: This function returns an array with at least
                 # one-dimension (1-d) so it will not preserve 0-d arrays.
@@ -400,58 +312,40 @@ class CityScape(BaseDataset):
             # if a label exists, also appends another value to the dictionary
             extra_dict['label'] = gt
 
-        if dimg is not None:
-            # if a label exists, also appends another value to the dictionary
-            extra_dict['embeddings'] = dimg        
-
         if self.preprocess is not None and extra_dict is not None:
             # appending the extra_dict (gt) to output_dict
             output_dict.update(**extra_dict)
 
         return output_dict
 
-    def _fetch_data(self, img_path, dpath=None, gt_path=None, dtype=None, embeddings=False):
+    def _fetch_data(self, img_path, gt_path=None, dtype=None):
         img = self._open_image(img_path)
-
-        if dpath is not None:
-            if embeddings == False:
-                dimg = np.array(Image.open(dpath))
-            else:
-                dimg = [torch.load(dpath[0]), torch.load(dpath[1])]
-        else:
-            dimg = None
 
         if gt_path is not None:
             gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=dtype)
-            return img, dimg, gt
+            return img, gt
 
-        return img, dimg, None
+        return img, None
 
     @classmethod
     def get_class_colors(*args):
 
         # Had to extend to two classes since
-        return [[128, 64, 128], [0, 70, 255]]
-
-        '''
-        , [244, 35, 232], [70, 70, 70],
+        return [[128, 64, 128], [0, 70, 255],
+                [244, 35, 232], [70, 70, 70],
                 [102, 102, 156], [190, 153, 153], [153, 153, 153],
                 [250, 170, 30], [220, 220, 0], [107, 142, 35],
                 [152, 251, 152], [70, 130, 180], [220, 20, 60], [255, 0, 0],
                 [0, 0, 142], [0, 0, 70], [0, 60, 100], [0, 80, 100],
                 [0, 0, 230], [119, 11, 32]]
-        '''
 
     @classmethod
     def get_class_names(*args):
-        return ['road', 'not_road']
-
-        '''
-        , 'sidewalk', 'building', 'wall', 'fence', 'pole',
+        return ['road', 'not_road',
+                'sidewalk', 'building', 'wall', 'fence', 'pole',
                 'traffic light', 'traffic sign',
                 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
                 'truck', 'bus', 'train', 'motorcycle', 'bicycle']
-        '''
 
     @classmethod
     def transform_label(cls, pred, name):

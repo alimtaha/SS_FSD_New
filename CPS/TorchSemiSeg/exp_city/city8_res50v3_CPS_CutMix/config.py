@@ -87,8 +87,11 @@ C.depthmix_boxmask_outside_bounds = False
 C.depthmix_boxmask_no_invert = False
 
 """Image Config"""
-C.num_classes = 2                              # need to change for training free space detection
-C.background = 100  # background changed to the class for the padding when cropping
+if os.environ['no_classes'] is not None:
+    C.num_classes = int(os.environ['no_classes'])
+else:
+    C.num_classes = 2                              # need to change for training free space detection
+C.background = 255  # background changed to the class for the padding when cropping
 C.image_mean = np.array([0.485, 0.456, 0.406])  # 0.485, 0.456, 0.406
 C.image_std = np.array([0.229, 0.224, 0.225])
 C.dimage_mean = 24.188  #Generated using full train & val & test sets on NewCRFs 80 Depth Maps
@@ -108,7 +111,7 @@ C.pixelation_factor = 8     #trialled 4 - implement randomised choice..?
 C.lowres_factor = 8         #implement randomised choice..?
 C.gaussian_kernel = [9,9]
 C.sup_contrast = False
-C.ignore_label = 100
+C.ignore_label = 255
 
 """Train Config"""
 if os.getenv('learning_rate'):
@@ -189,6 +192,9 @@ if os.getenv('load_checkpoint') is not None:
     else:
         C.load_checkpoint = False
         image_pretrain_str = ''
+else:
+    C.load_checkpoint = False
+    image_pretrain_str = ''
 
 if os.getenv('load_depth_checkpoint') is not None:
     if str(os.environ['load_depth_checkpoint']) == 'True':
@@ -198,14 +204,20 @@ if os.getenv('load_depth_checkpoint') is not None:
     else:
         C.load_depth_checkpoint = False
         depth_pretrain_str = ''
+else:
+    C.load_depth_checkpoint = False
+    depth_pretrain_str = ''
 
 if os.getenv('depth_only') is not None:
     if str(os.environ['depth_only']) == 'True':
         C.depth_only = True
-        depth_only_str = '_DepthOnly_'
+        depth_only_str = '_DepthOnly_'        
     else:
         C.depth_only = False
         depth_only_str = ''
+else:
+    C.depth_only = False
+    depth_only_str = ''
 
 run_id = f"{dt.now().strftime('%d-%h_%H-%M')}-nodebs{C.batch_size}-tep{C.nepochs}-lr{C.lr}-maxdepth{C.max_d}_{C.depth_ckpt.split('_')[0]}"
 name = f"{C.mode}_{depth_only_str}{image_pretrain_str}{depth_pretrain_str}{run_id}"
