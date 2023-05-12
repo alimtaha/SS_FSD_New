@@ -9,13 +9,13 @@ from custom_collate import SegCollate
 import mask_gen_depth
 from torch.utils.tensorboard import SummaryWriter
 from matplotlib import pyplot as plt
-from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision, recall_and_precision_all
+from furnace.seg_opr.metric import hist_info, compute_score, compute_score_recall_precision
 from furnace.engine.evaluator import Evaluator
 from furnace.utils.pyt_utils import load_model
 from furnace.seg_opr.loss_opr import SigmoidFocalLoss, ProbOhemCrossEntropy2d, bce2d
 from furnace.engine.engine import Engine
 from furnace.engine.lr_policy import WarmUpPolyLR
-from furnace.utils.visualize import print_iou, show_img
+from furnace.utils.visualize import print_iou, show_img, print_pr
 from furnace.utils.init_func import init_weight, group_weight
 from furnace.utils.img_utils import generate_random_uns_crop_pos
 import random
@@ -371,13 +371,14 @@ def compute_metric(results):
         labeled += d['labeled']
         count += 1
 
+    p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_score_recall_precision(hist, correct, labeled)
     iu, mean_IU, _, mean_pixel_acc = compute_score(hist, correct,
                                                    labeled)
     # changed from the variable dataset to the class directly so this function
     # can now be called without first initialising the eval file
     print(len(CityScape.get_class_names()))
 
-    return iu, mean_IU, _, mean_pixel_acc
+    return iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back
 
 
 def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
@@ -892,9 +893,6 @@ with Engine(custom_parser=parser) as engine:
 
                 with torch.no_grad():
 
-                    concat_image = np.zeros((1024, 2048, 500), dtype=np.uint8)
-                    concat_gt = np.zeros((1024, 2048, 500), dtype=np.uint8)
-
                     for batch_test in tqdm(
                             test_loader,
                             desc=f"Epoch: {epoch + 1}/{config.nepochs}. Loop: Validation",
@@ -981,9 +979,6 @@ with Engine(custom_parser=parser) as engine:
 
                         hist_tmp, labeled_tmp, correct_tmp = hist_info(
                             config.num_classes, pred_test_max, gts_test[0, :, :].cpu().numpy())
-                        
-                        concat_image[:, :, (step_test-1)] = pred_test_max
-                        concat_gt[:, :, (step_test-1)] = gts_test[0, :, :].cpu().numpy()
 
                         results_dict = {
                             'hist': hist_tmp,
@@ -1012,15 +1007,15 @@ with Engine(custom_parser=parser) as engine:
                                 step_test)
 
                 if engine.local_rank == 0:
-                    iu, mean_IU, _, mean_pixel_acc = compute_metric(
+                    iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(
                         all_results)
                     loss_sup_test = loss_sup_test / len(test_loader)
                     
                     concat_image = concat_image.astype(np.uint8)
                     concat_gt = concat_image.astype(np.uint8)
                         
-                    p, mean_p, r, mean_r = recall_and_precision_all(
-                        concat_image.reshape((1024, -1)), concat_gt.reshape(1024, -1), config.num_classes)
+                    _ = print_pr(p, r,
+                              CityScape.get_class_names(), True)
 
                     if mean_IU > mean_IU_last and loss_sup_test < loss_sup_test_last:
                         if os.path.exists(path_best):

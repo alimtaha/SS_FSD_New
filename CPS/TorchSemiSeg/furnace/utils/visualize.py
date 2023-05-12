@@ -83,6 +83,7 @@ def print_iou(
         no_print=False):
     n = iu.size
     lines = []
+    lines.append('')
     for i in range(n):
         if class_names is None:
             cls = 'Class %d:' % (i + 1)
@@ -93,7 +94,7 @@ def print_iou(
     mean_IU_no_back = np.nanmean(iu[1:])
     if show_no_back:
         lines.append(
-            '----------------------------     %-8s\t%.3f%%\t%-8s\t%.3f%%\t%-8s\t%.3f%%' %
+            '-------------IoU---------------     %-8s\t%.3f%%\t%-8s\t%.3f%%\t%-8s\t%.3f%%' %
             ('mean_IU',
              mean_IU *
              100,
@@ -106,8 +107,62 @@ def print_iou(
     else:
         print(mean_pixel_acc)
         lines.append(
-            '----------------------------     %-8s\t%.3f%%\t%-8s\t%.3f%%' %
+            '-------------IoU---------------     %-8s\t%.3f%%\t%-8s\t%.3f%%' %
             ('mean_IU', mean_IU * 100, 'mean_pixel_ACC', mean_pixel_acc * 100))
+    line = "\n".join(lines)
+    if not no_print:
+        print(line)
+    return line
+
+def print_pr(
+        p,
+        r,
+        class_names=None,
+        show_no_back=False,
+        no_print=False):
+    n = p.size
+    lines = []
+    lines.append('-----------Precision-----------------')
+    for i in range(n):
+        if class_names is None:
+            cls = 'Class %d:' % (i + 1)
+        else:
+            cls = '%d %s' % (i + 1, class_names[i])
+        lines.append('%-8s\t%.3f%%' % (cls, p[i] * 100))
+    mean_p = np.nanmean(p)
+    mean_p_no_back = np.nanmean(p[1:])
+    lines.append('')
+    lines.append(
+        ' %-8s\t%.3f%%\t%-8s\t%.3f%%' %
+        ('mean_precision',
+            mean_p *
+            100,
+            'mean_precision_no_back',
+            mean_p_no_back *
+            100))
+    lines.append('-----------Precision-----------------')
+    lines.append('')
+    
+    for i in range(n):
+        if class_names is None:
+            cls = 'Class %d:' % (i + 1)
+        else:
+            cls = '%d %s' % (i + 1, class_names[i])
+        lines.append('%-8s\t%.3f%%' % (cls, r[i] * 100))
+    mean_r = np.nanmean(r)
+    mean_r_no_back = np.nanmean(r[1:])    
+    lines.append('--------------Recall--------------')
+    lines.append(
+        ' %-8s\t%.3f%%\t%-8s\t%.3f%%' %
+        ('mean_recall',
+            mean_r *
+            100,
+            'mean_recall_no_back',
+            mean_r_no_back *
+            100))
+    lines.append('-----------Recall-----------------')
+    lines.append('')
+    
     line = "\n".join(lines)
     if not no_print:
         print(line)

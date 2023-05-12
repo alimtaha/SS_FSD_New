@@ -7,7 +7,6 @@ np.seterr(divide='ignore', invalid='ignore')
 
 # voc cityscapes metric
 def hist_info(n_cl, pred, gt):
-    print(pred.shape, gt.shape)
     assert (pred.shape == gt.shape)
     k = (gt >= 0) & (gt < n_cl)  # return boolean array where all conditions matched are true and others as false? same size as gt - done to not take into account the ignore ondex as seen below with the labelled sum
     # k is a list of length 1024, where every element is a list of length
