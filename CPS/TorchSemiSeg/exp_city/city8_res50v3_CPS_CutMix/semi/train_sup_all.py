@@ -206,7 +206,7 @@ with Engine(custom_parser=parser) as engine:
     # saying at least 50,000 valid targets per image (but summing them up
     # since the loss for an entire minibatch is computed at once)
     pixel_num = 5000 * config.batch_size // engine.world_size
-    criterion = ProbOhemCrossEntropy2d(ignore_label=onfig.ignore_label, thresh=0.7,  # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
+    criterion = ProbOhemCrossEntropy2d(ignore_label=config.ignore_label, thresh=0.7,  # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
                                        min_kept=pixel_num, use_weight=False)
 
    # if engine.distributed:
@@ -589,9 +589,9 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('Val/Mean_Recall', round(mean_r * 100, 2), step)
 
                 for i, n in enumerate(CityScape.get_class_names()):
-                    logger.add_scalar('Val/IoU_{n}', iu[i] * 100, step)
-                    logger.add_scalar('Val/Prec_{n}', round(p[i] * 100, 2), step)
-                    logger.add_scalar('Val/Recall_{n}', round(r[i] * 100, 2), step)                 
+                    logger.add_scalar(f'Val/IoU_{n}', iu[i] * 100, step)
+                    logger.add_scalar(f'Val/Prec_{n}', round(p[i] * 100, 2), step)
+                    logger.add_scalar(f'Val/Recall_{n}', round(r[i] * 100, 2), step)                 
 
                 f1_score = (
                     2 * mean_p * mean_r) / (
