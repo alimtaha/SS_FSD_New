@@ -376,7 +376,6 @@ def compute_metric(results):
                                                    labeled)
     # changed from the variable dataset to the class directly so this function
     # can now be called without first initialising the eval file
-    print(len(CityScape.get_class_names()))
 
     return iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back
 
@@ -491,9 +490,9 @@ with Engine(custom_parser=parser) as engine:
     # saying at least 50,000 valid targets per image (but summing them up
     # since the loss for an entire minibatch is computed at once)
     pixel_num = 500 * config.batch_size // engine.world_size
-    criterion = ProbOhemCrossEntropy2d(ignore_label=255, thresh=0.7, min_kept=pixel_num, use_weight=False) # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
+    criterion = ProbOhemCrossEntropy2d(ignore_label=config.ignore_label, thresh=0.7, min_kept=pixel_num, use_weight=False) # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
                                        
-    criterion_cps = nn.CrossEntropyLoss(reduction='mean', ignore_index=255)
+    criterion_cps = nn.CrossEntropyLoss(reduction='mean', ignore_index=config.ignore_label)
 
     if engine.distributed and not engine.cpu_only:
         BatchNorm2d = nn.SyncBatchNorm
@@ -847,7 +846,7 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                if step % 100 == 0:
+                if step % 500 == 0:
                     viz_image(
                         imgs,
                         gts,
@@ -1010,10 +1009,7 @@ with Engine(custom_parser=parser) as engine:
                     iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(
                         all_results)
                     loss_sup_test = loss_sup_test / len(test_loader)
-                    
-                    concat_image = concat_image.astype(np.uint8)
-                    concat_gt = concat_image.astype(np.uint8)
-                        
+
                     _ = print_pr(p, r,
                               CityScape.get_class_names(), True)
 

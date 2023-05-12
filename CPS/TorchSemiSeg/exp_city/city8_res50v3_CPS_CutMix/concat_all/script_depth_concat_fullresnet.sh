@@ -3,9 +3,9 @@ nvidia-smi
 
 export NGPUS=1
 export learning_rate=0.02
-export batch_size=2
+export batch_size=1
 export snapshot_iter=2
-export epochs=100
+export epochs=137
 export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
@@ -14,7 +14,7 @@ export debug="False"
 export full_depth_resnet="True"
 export load_checkpoint="False"
 export load_depth_checkpoint="False"
-export depth_only="True"
+export depth_only="False"
 export no_classes=19
 
 export checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/Semi-Supervision_Ratio16_22-Apr_21-23-nodebs2-tep35-lr0.002-maxdepth80_newcrfs/epoch-best_loss.pth"

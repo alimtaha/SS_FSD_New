@@ -4,13 +4,13 @@ import os
 sys.path.append(os.getcwd() + '/../../..')
 sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
-from furnace.seg_opr.metric import hist_info, compute_score, recall_and_precision
+from furnace.seg_opr.metric import hist_info, compute_score, compute_score_recall_precision
 from furnace.engine.evaluator import Evaluator
 from furnace.utils.pyt_utils import load_model
 from furnace.seg_opr.loss_opr import SigmoidFocalLoss, ProbOhemCrossEntropy2d, bce2d
 from furnace.engine.engine import Engine
 from furnace.engine.lr_policy import WarmUpPolyLR
-from furnace.utils.visualize import print_iou, show_img
+from furnace.utils.visualize import print_iou, show_img, print_pr
 from furnace.utils.init_func import init_weight, group_weight
 import random
 import cv2
@@ -147,13 +147,13 @@ def compute_metric(results):
         labeled += d['labeled']
         count += 1
 
+    p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_score_recall_precision(hist, correct, labeled)
     iu, mean_IU, _, mean_pixel_acc = compute_score(hist, correct,
                                                    labeled)
     # changed from the variable dataset to the class directly so this function
     # can now be called without first initialising the eval file
-    print(len(CityScape.get_class_names()))
 
-    return iu, mean_IU, _, mean_pixel_acc
+    return iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back
 
 
 def viz_image(imgs, gts, pred, step, epoch, name, step_test=None):
@@ -244,7 +244,7 @@ with Engine(custom_parser=parser) as engine:
     # saying at least 50,000 valid targets per image (but summing them up
     # since the loss for an entire minibatch is computed at once)
     pixel_num = 5000 * config.batch_size // engine.world_size
-    criterion = ProbOhemCrossEntropy2d(ignore_label=100, thresh=0.7,  # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
+    criterion = ProbOhemCrossEntropy2d(ignore_label=config.ignore_label, thresh=0.7,  # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
                                        min_kept=pixel_num, use_weight=False)
 
    # if engine.distributed:
@@ -334,7 +334,6 @@ with Engine(custom_parser=parser) as engine:
 
     # config lr policy
     total_iteration = config.nepochs * config.fully_sup_iters
-    print(total_iteration)
     lr_policy = WarmUpPolyLR(
         base_lr,
         config.lr_power,
@@ -358,38 +357,6 @@ with Engine(custom_parser=parser) as engine:
     if engine.continue_state_object:
         engine.restore_checkpoint()     # it will change the state dict of optimizer also
 
-    '''
-    def val_step(engine, batch):
-        model.eval()
-        loss_sup_test = 0
-        with torch.no_grad():
-            imgs_test = batch['data'].to(device)
-            gts_test = batch['label'].to(device)
-            pred_test = model.branch1(imgs_test)
-            loss_sup_test = loss_sup_test + criterion(pred_test, gts_test)
-        return gts_test, gts_test
-
-    evaluator = i_engine.Engine(val_step)
-    cm = ConfusionMatrix(num_classes=2)
-
-    val_metrics = {
-    "pixel accuracy": Accuracy(),
-    "average precision": Precision(average=True),
-    "average recall": Recall(average=True),
-    "IoU": IoU(cm),
-    "average iou": mIoU(cm),
-    "F1 Score": DiceCoefficient(cm), #ignore index needs to be changed to 2 and set for all iou losses and F1
-    "Loss": Loss(criterion)
-    }
-
-    for name, metric in val_metrics.items():
-        metric.attach(evaluator, name)
-
-
-    def log_val_results(evaluator):
-        state = evaluator.run(test_loader)
-        return state.metrics
-    '''
 
     #model = load_model(model, '/media/taha_a/T7/Datasets/cityscapes/outputs/city/snapshot/snapshot/epoch-18.pth')
 
@@ -497,7 +464,7 @@ with Engine(custom_parser=parser) as engine:
                 #wandb.log({f"Train/Total Loss": loss}, step=step)
                 logger.add_scalar('train_loss_sup', loss_sup, step)
 
-                if step % 100 == 0:
+                if step % 500 == 0:
                     viz_image(imgs, gts, sup_pred_l, step, epoch, None)
                     #images = wandb.Image(image_array, caption="Top: Output, Bottom: Input")
                     # wandb.log({"examples": images}
@@ -542,7 +509,7 @@ with Engine(custom_parser=parser) as engine:
 
                         imgs_test = batch_test['data'].to(device)
                         gts_test = batch_test['label'].to(device)
-                        #pred_test = model.branch1(imgs_test)
+
                         #Embedding
                         pred_test, _, v3_feats = model.branch1(imgs_test)
 
@@ -619,14 +586,7 @@ with Engine(custom_parser=parser) as engine:
 
                         hist_tmp, labeled_tmp, correct_tmp = hist_info(
                             config.num_classes, pred_test_max, gts_test[0, :, :].cpu().numpy())
-                        p, mean_p, r, mean_r = recall_and_precision(
-                            pred_test_max, gts_test[0, :, :].cpu().numpy(), config.num_classes)
-                        prec_recall_metrics[0].append(p[0])
-                        prec_recall_metrics[1].append(p[1])
-                        prec_recall_metrics[2].append(r[0])
-                        prec_recall_metrics[3].append(r[1])
-                        prec_recall_metrics[4].append(mean_p)
-                        prec_recall_metrics[5].append(mean_r)
+
                         results_dict = {
                             'hist': hist_tmp,
                             'labeled': labeled_tmp,
@@ -641,8 +601,11 @@ with Engine(custom_parser=parser) as engine:
                             viz_image(
                                 imgs_test, gts_test, pred_test, step, epoch, step_test)
 
-                iu, mean_IU, _, mean_pixel_acc = compute_metric(all_results)
+                iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(all_results)
                 loss_sup_test = loss_sup_test / len(test_loader)
+
+                _ = print_pr(p, r,
+                              CityScape.get_class_names(), True)
 
                 if mean_IU > mean_IU_last and loss_sup_test < loss_sup_test_last:
                         if os.path.exists(path_best):
@@ -658,37 +621,20 @@ with Engine(custom_parser=parser) as engine:
                 _ = print_iou(iu, mean_pixel_acc,
                               CityScape.get_class_names(), True)
                 logger.add_scalar('trainval_loss_sup', loss, step)
-                logger.add_scalar(
-                    'Val/Mean_Pixel_Accuracy',
-                    mean_pixel_acc * 100,
-                    step)
+                logger.add_scalar('Val/Mean_Pixel_Accuracy', mean_pixel_acc * 100, step)
                 logger.add_scalar('Val/Mean_IoU', mean_IU * 100, step)
-                logger.add_scalar('Val/IoU_Road', iu[0] * 100, step)
-                logger.add_scalar('Val/IoU_NonRoad', iu[1] * 100, step)
+                logger.add_scalar('Val/Mean_Prec', round(mean_p * 100, 2), step)
+                logger.add_scalar('Val/Mean_Recall', round(mean_r * 100, 2), step)
 
-                for i, n in enumerate(prec_recall_metrics):
-                    prec_recall_metrics[i] = sum(n) / len(n)
-                    logger.add_scalar(
-                        f'Val/{names[i]}',
-                        round(
-                            prec_recall_metrics[i] *
-                            100,
-                            2),
-                        step)
+                for i, n in enumerate(CityScape.get_class_names()):
+                    logger.add_scalar(f'Val/IoU_{n}', iu[i] * 100, step)
+                    logger.add_scalar(f'Val/Prec_{n}', round(p[i] * 100, 2), step)
+                    logger.add_scalar(f'Val/Recall_{n}', round(r[i] * 100, 2), step)                 
+
                 f1_score = (
-                    2 * prec_recall_metrics[4] * prec_recall_metrics[5]) / (
-                    prec_recall_metrics[4] + prec_recall_metrics[5])
+                    2 * mean_p * mean_r) / (
+                    mean_p + mean_r)
                 logger.add_scalar('Val/F1 Score', round(f1_score, 2), step)
-                logger.add_scalar(
-                    'Val/Precision vs Recall',
-                    round(
-                        prec_recall_metrics[4] *
-                        100,
-                        2),
-                    round(
-                        prec_recall_metrics[5] *
-                        100,
-                        2))
 
                 if False: #(step-config.embed_every) % config.embed_every == 0:
                     #logger.add_embedding(feats_sample, feats_labels_sample, global_step=step)
@@ -702,12 +648,12 @@ with Engine(custom_parser=parser) as engine:
                         'iou_road': iu[0]*100,
                         'iou_nonroad': iu[1]*100,
                         'accuracy': round(mean_pixel_acc*100, 2),
-                        'prec_road': round(prec_recall_metrics[0]*100, 2),
-                        'prec_non_road': round(prec_recall_metrics[1]*100, 2),
-                        'recall_road': round(prec_recall_metrics[2]*100, 2),
-                        'recall_non_road': round(prec_recall_metrics[3]*100, 2),
-                        'mean_prec': round(prec_recall_metrics[4]*100, 2),
-                        'mean_recall': round(prec_recall_metrics[5]*100, 2),
+                        'prec_road': round(p[0]*100, 2),
+                        'prec_non_road': round(p[1]*100, 2),
+                        'recall_road': round(r[0]*100, 2),
+                        'recall_non_road': round(r[1]*100, 2),
+                        'mean_prec': round(mean_p*100, 2),
+                        'mean_recall': round(mean_r*100, 2),
                         'f1_score': round(f1_score, 2)
                     }
 
