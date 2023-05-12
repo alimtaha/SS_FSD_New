@@ -1042,9 +1042,9 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('Val/Mean_Recall', round(mean_r * 100, 2), step)
 
                 for i, n in enumerate(CityScape.get_class_names()):
-                    logger.add_scalar('Val/IoU_{n}', iu[i] * 100, step)
-                    logger.add_scalar('Val/Prec_{n}', round(p[i] * 100, 2), step)
-                    logger.add_scalar('Val/Recall_{n}', round(r[i] * 100, 2), step)                 
+                    logger.add_scalar(f'Val/IoU_{n}', iu[i] * 100, step)
+                    logger.add_scalar(f'Val/Prec_{n}', round(p[i] * 100, 2), step)
+                    logger.add_scalar(f'Val/Recall_{n}', round(r[i] * 100, 2), step)                 
 
                 f1_score = (
                     2 * mean_p * mean_r) / (

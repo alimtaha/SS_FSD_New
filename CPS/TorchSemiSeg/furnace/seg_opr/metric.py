@@ -50,10 +50,29 @@ def compute_score(hist, correct, labeled):
 
     return iu, mean_IU, mean_IU_no_back, mean_pixel_acc
 
+
+def compute_score_recall_precision(hist, correct, labeled):
+    # np.diag extracts all the diagonal elemennts, for a confusion matrix, the
+    # diagonal elements would be the correctly labelled classes
+    r = np.diag(hist) / (hist.sum(1))
+    p = np.diag(hist) / (hist.sum(0))
+    # in this histogram, the images on the columns are the predictions,
+    # whereas the images on the rows are the ground truth
+    # hist.sum(1) and hist.sum(0) give you false positives and negatives, it's
+    # a confusion matrix (however you then need to subtract all the diagnial
+    # pixels since the true positives will be added twice in the denominatior
+    # once with the .sum(1) and then again with the .sum(0), so we need to cancel one of them)
+    mean_r = np.nanmean(r)
+    mean_p = np.nanmean(p)
+    # this is just the mean iou exlcuding the first class (road in this case)
+    mean_r_no_back = np.nanmean(r[1:])
+    mean_p_no_back = np.nanmean(p[1:])
+
+    return p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back
+
 def recall_and_precision_all(pred, gt, n_cl):
     assert (pred.shape == gt.shape)
     k = (gt >= 0) & (gt < n_cl)  # return boolean array where all conditions matched are true and others as false? same size as gt - done to not take into account the ignore ondex as seen below with the labelled sum
-    print(k.shape)
     # k is a list of length 1024, where every element is a list of length
     # 2048, it is effectively as 1024 x 2048 array (in the case of whole image
     # eval)

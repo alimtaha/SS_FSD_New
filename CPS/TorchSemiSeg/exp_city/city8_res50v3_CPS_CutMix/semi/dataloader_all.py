@@ -331,7 +331,7 @@ class CityScape(BaseDataset):
     def get_class_colors(*args):
 
         # Had to extend to two classes since
-        return [[128, 64, 128], [0, 70, 255],
+        return [[128, 64, 128],
                 [244, 35, 232], [70, 70, 70],
                 [102, 102, 156], [190, 153, 153], [153, 153, 153],
                 [250, 170, 30], [220, 220, 0], [107, 142, 35],
@@ -341,7 +341,7 @@ class CityScape(BaseDataset):
 
     @classmethod
     def get_class_names(*args):
-        return ['road', 'not_road',
+        return ['road',
                 'sidewalk', 'building', 'wall', 'fence', 'pole',
                 'traffic light', 'traffic sign',
                 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
