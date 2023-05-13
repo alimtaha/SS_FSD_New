@@ -11,6 +11,8 @@ export CPU_DIST_ONLY=False
 export WORLD_SIZE=1
 export mode="Full-Supervision"
 export debug="False"
+export full_depth_resnet="False"
+export no_classes=2
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Full/'

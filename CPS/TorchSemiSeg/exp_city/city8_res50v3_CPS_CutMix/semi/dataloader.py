@@ -116,10 +116,10 @@ class TrainPre(
         if gt is not None:
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, 100)
+            p_gt, _ = random_crop_pad_to_shape(gt, crop_pos, crop_size, config.ignore_label)
             # ignore label for image padding changed to 100, all other labels
             # that are 255 are now used for training
-            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, 100)
+            p_cgt, _ = random_crop_pad_to_shape(cgt, crop_pos, crop_size, config.ignore_label)
         else:
             p_gt = None
             p_cgt = None

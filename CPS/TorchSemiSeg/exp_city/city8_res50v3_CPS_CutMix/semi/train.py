@@ -227,7 +227,7 @@ logger = SummaryWriter(
 #     log_dir=tb_dir +
 #     '_v3embedder',
 #     comment=experiment_name)
-# parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser()
 os.environ['MASTER_PORT'] = '169711'
 
 with Engine(custom_parser=parser) as engine:
