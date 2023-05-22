@@ -3,7 +3,7 @@ nvidia-smi
 
 export NGPUS=1
 export learning_rate=0.02
-export batch_size=1
+export batch_size=2
 export snapshot_iter=2
 export epochs=100
 export ratio=16

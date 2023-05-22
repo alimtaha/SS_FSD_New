@@ -453,6 +453,8 @@ logger = SummaryWriter(
 #     comment=experiment_name)
 
 path_best = osp.join(tb_dir, 'epoch-best_loss.pth')
+path_best_miou = osp.join(tb_dir, 'epoch-best_miou.pth')
+
 
 parser = argparse.ArgumentParser()
 os.environ['MASTER_PORT'] = '169711'
@@ -1053,15 +1055,33 @@ with Engine(custom_parser=parser) as engine:
                     best_metrics = { 
                         'miou': mean_IU*100,
                         'iou_road': iu[0]*100,
-                        'iou_car': iu[13]*100,
-                        'iou_person': iu[11]*100,
+                        'iou_sidewalk': iu[1]*100,
+                        'iou_building': iu[2]*100,
+                        'iou_wall': iu[3]*100,
+                        'iou_fence': iu[4]*100,
+                        'iou_pole': iu[5]*100,
                         'iou_traffic_light': iu[6]*100,
+                        'iou_traffic_sign': iu[7]*100,
                         'iou_vegetation': iu[8]*100,
+                        'iou_terrain': iu[9]*100,
+                        'iou_sky': iu[10]*100,
+                        'iou_person': iu[11]*100,
+                        'iou_rider': iu[12]*100,
+                        'iou_car': iu[13]*100,
+                        'iou_truck': iu[14]*100,
+                        'iou_bus': iu[15]*100,
+                        'iou_train': iu[16]*100,
+                        'iou_motorcycle': iu[17]*100,
+                        'iou_bicycle': iu[18]*100,
                         'accuracy': round(mean_pixel_acc*100, 2),
                         'mean_prec': round(mean_p*100, 2),
                         'mean_recall': round(mean_r*100, 2),
                         'f1_score': round(f1_score, 2)
                     }
+                    
+                    if os.path.exists(path_best_miou):
+                        os.remove(path_best_miou)
+                    engine.save_checkpoint(path_best_miou)
 
                 #The following lines clear the embeddings from the GPU which causes out of memory error (copy model to CPU and back forces clear)
                 model.cpu()
