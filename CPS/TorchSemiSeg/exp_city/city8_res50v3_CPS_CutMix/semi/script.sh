@@ -2,11 +2,11 @@
 nvidia-smi
 
 export NGPUS=1
-export learning_rate=0.002
+export learning_rate=0.004
 export batch_size=2
 export snapshot_iter=2
-export epochs=40
-export ratio=8
+export epochs=100
+export ratio=16
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
 export mode="Semi-Supervision"

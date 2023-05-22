@@ -2,7 +2,7 @@
 nvidia-smi
 
 export NGPUS=1
-export learning_rate=0.008
+export learning_rate=0.004
 export batch_size=2
 export snapshot_iter=2
 export epochs=100
@@ -12,8 +12,8 @@ export WORLD_SIZE=1
 export mode="Concat-Semi-Supervision-FullResnet"
 export debug="False"
 export full_depth_resnet="True"
-export load_checkpoint="True"
-export load_depth_checkpoint="True"
+export load_checkpoint="False"
+export load_depth_checkpoint="False"
 export depth_only="False"
 export no_classes=2
 
