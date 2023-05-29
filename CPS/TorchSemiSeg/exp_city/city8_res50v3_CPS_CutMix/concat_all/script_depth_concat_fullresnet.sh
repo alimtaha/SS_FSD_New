@@ -5,8 +5,8 @@ export NGPUS=1
 export learning_rate=0.02
 export batch_size=2
 export snapshot_iter=2
-export epochs=100
-export ratio=16
+export epochs=107
+export ratio=8
 export CPU_DIST_ONLY='False'
 export WORLD_SIZE=1
 export mode="All-Labels-Concat-Semi-Supervision-FullResnet"
@@ -17,8 +17,8 @@ export load_depth_checkpoint="True"
 export depth_only="False"
 export no_classes=19
 
-export checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/All_Semi-Supervision_Ratio16_10-May_19-19-nodebs2-tep100-lr0.02-maxdepth80_newcrfs/epoch-best_loss.pth"
-export depth_checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/All-Labels-Concat-Semi-Supervision-FullResnet_Ratio16__DepthOnly_10-May_19-05-nodebs2-tep100-lr0.02-maxdepth80_newcrfs/epoch-best_loss.pth"
+export checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/All_Semi-Supervision_Ratio8_25-May_15-20-nodebs2-tep107-lr0.02-maxdepth80_newcrfs/epoch-best_loss.pth"
+export depth_checkpoint_path="/mnt/Dataset/Logs/SSL/CPS/Semi/All-Labels-Concat-Semi-Supervision-FullResnet_Ratio8__DepthOnly_25-May_15-26-nodebs2-tep107-lr0.02-maxdepth80_newcrfs/epoch-best_loss.pth"
 
 export volna="/mnt/Dataset/city/"
 export OUTPUT_PATH='/mnt/Dataset/Logs/SSL/CPS/Semi/'

@@ -208,6 +208,12 @@ else:
     C.load_depth_checkpoint = False
     depth_pretrain_str = ''
 
+if os.getenv('depth_checkpoint_path') is not None:
+    C.depth_checkpoint_path = str(os.environ['depth_checkpoint_path'])
+
+if os.getenv('semi_checkpoint_path') is not None:
+    C.semi_checkpoint_path = str(os.environ['semi_checkpoint_path'])
+
 if os.getenv('depth_only') is not None:
     if str(os.environ['depth_only']) == 'True':
         C.depth_only = True
