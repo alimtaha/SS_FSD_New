@@ -526,15 +526,15 @@ with Engine(custom_parser=parser) as engine:
                 logger.add_scalar('train_loss_sup_r', loss_sup_r, step)
                 logger.add_scalar('train_loss_cps', cps_loss, step)
 
-                if step % 100 == 0:
-                    viz_image(
-                        imgs,
-                        gts,
-                        sup_pred_l,
-                        step,
-                        epoch,
-                        minibatch['fn'][0],
-                        None)
+                # if step % 100 == 0:
+                #     viz_image(
+                #         imgs,
+                #         gts,
+                #         sup_pred_l,
+                #         step,
+                #         epoch,
+                #         minibatch['fn'][0],
+                #         None)
 
             if step % config.validate_every == 0 or (
                     is_debug and (step % 10 == 0)):
@@ -661,25 +661,25 @@ with Engine(custom_parser=parser) as engine:
                             'correct': correct_tmp}
                         all_results.append(results_dict)
 
-                        if epoch + 1 > 20:
-                            if step_test % 50 == 0:
-                                viz_image(
-                                    imgs_test,
-                                    gts_test,
-                                    pred_test,
-                                    step,
-                                    epoch,
-                                    batch_test['fn'][0],
-                                    step_test)
-                        elif step_test % 50 == 0:
-                            viz_image(
-                                imgs_test,
-                                gts_test,
-                                pred_test,
-                                step,
-                                epoch,
-                                batch_test['fn'][0],
-                                step_test)
+                        # if epoch + 1 > 20:
+                        #     if step_test % 50 == 0:
+                        #         viz_image(
+                        #             imgs_test,
+                        #             gts_test,
+                        #             pred_test,
+                        #             step,
+                        #             epoch,
+                        #             batch_test['fn'][0],
+                        #             step_test)
+                        # elif step_test % 50 == 0:
+                        #     viz_image(
+                        #         imgs_test,
+                        #         gts_test,
+                        #         pred_test,
+                        #         step,
+                        #         epoch,
+                        #         batch_test['fn'][0],
+                        #         step_test)
 
                 if engine.local_rank == 0:
                     iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(

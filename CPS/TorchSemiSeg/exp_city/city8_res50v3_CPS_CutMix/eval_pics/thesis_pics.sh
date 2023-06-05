@@ -13,7 +13,7 @@ export mode="Thesis_Pics"
 export debug="False"
 export full_depth_resnet="True"
 export load_checkpoint="False"
-export load_depth_checkpoint="True"
+export load_depth_checkpoint="False"
 export depth_only="False"
 export no_classes=19
 

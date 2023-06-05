@@ -6,7 +6,6 @@ sys.path.append(os.getcwd() + '/../../..')
 sys.path.append(os.getcwd() + '/../..')
 sys.path.append(os.getcwd() + '/..')
 from custom_collate import SegCollate
-import mask_gen_depth
 from torch.utils.tensorboard import SummaryWriter
 from matplotlib import pyplot as plt
 from furnace.seg_opr.metric import hist_info, compute_score, compute_score_recall_precision
@@ -21,9 +20,11 @@ from furnace.utils.img_utils import generate_random_uns_crop_pos
 import random
 import cv2
 import pandas as pd
-from eval_depth_concat import SegEvaluator
-from dataloader_depth_concat import CityScape, get_train_loader, TrainValPre
-from network_depth_concat import Network, NetworkFullResnet, count_params
+from network import Network
+from dataloader_depth_concat import CityScape as CityScape_All
+from dataloader_depth_concat import TrainValPre as TrainValPre_All
+from dataloader_all import CityScape, TrainValPre
+from network_depth_concat import NetworkFullResnet
 from config import config
 from matplotlib import colors
 from PIL import Image
@@ -142,74 +143,21 @@ with Engine(custom_parser=parser) as engine:
 
     cudnn.benchmark = True  # Changed to False due to error
 
-    pixel_num = 500 * config.batch_size // engine.world_size
-    criterion = ProbOhemCrossEntropy2d(ignore_label=config.ignore_label, thresh=0.7, min_kept=pixel_num, use_weight=False) # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
-     
-    
-    model_semi = NetworkFullResnet(config.num_classes, criterion=criterion,  # change number of classes to free space only
-                    pretrained_model=config.pretrained_model,
-                    norm_layer=nn.BatchNorm2d,
-                    full_depth_resnet=True,
-                    depth_only=config.depth_only) 
-
-    model_depth = NetworkFullResnet(config.num_classes, criterion=criterion,  # change number of classes to free space only
-                    pretrained_model=config.pretrained_model,
-                    norm_layer=nn.BatchNorm2d,
-                    full_depth_resnet=True,
-                    depth_only=config.depth_only) 
-    
-
-    #Loading depth model
-    image_state_dict = torch.load(config.depth_checkpoint_path, map_location='cpu') #Change
-    image_layers_loaded = []
-    own_state = model_depth.state_dict()
-    print(own_state['branch1.classifier.bias'].data, image_state_dict['model']['branch1.classifier.bias'].data)
-    for name, param in image_state_dict['model'].items():
-        if (name in own_state) and name.startswith(image_layer_tuple):#('branch1.head.depth') or name.startswith('branch2.head.last_conv'):
-            param = param.data
-            own_state[name].copy_(param)
-            image_layers_loaded.append(name)
-        else:
-            continue
-
-    print('Image Checkpoint loaded for Depth Model: ', config.depth_checkpoint_path)
-
-    depth_state_dict = torch.load(config.depth_checkpoint_path, map_location='cpu') #Change
-    depth_layers_loaded = []
-    own_state = model_depth.state_dict()
-    print(own_state['branch1.classifier.bias'].data, depth_state_dict['model']['branch1.classifier.bias'].data)
-    for name, param in depth_state_dict['model'].items():
-        if (name in own_state) and name.startswith(depth_layer_tuple): #name.startswith('branch1.head.last_conv') or name.startswith('branch2.head.last_conv'):
-            param = param.data
-            own_state[name].copy_(param)
-            depth_layers_loaded.append(name)
-        else:
-            continue
-
-    print('Depth Checkpoint loaded for Depth Model: ', config.depth_checkpoint_path)
-
-
-    #Loading image model
-    image_state_dict = torch.load(config.semi_checkpoint_path, map_location='cpu') #Change
-    image_layers_loaded = []
-    own_state = model_semi.state_dict()
-    print(own_state['branch1.classifier.bias'].data, image_state_dict['model']['branch1.classifier.bias'].data)
-    for name, param in image_state_dict['model'].items():
-        if (name in own_state) and name.startswith(image_layer_tuple):#('branch1.head.depth') or name.startswith('branch2.head.last_conv'):
-            param = param.data
-            own_state[name].copy_(param)
-            image_layers_loaded.append(name)
-        else:
-            continue
-
-    print('Image Checkpoint loaded for Image Model: ', config.semi_checkpoint_path)
-
     data_setting = {'img_root': config.img_root_folder,
                     'gt_root': config.gt_root_folder,
                     'train_source': config.train_source,
                     'eval_source': config.eval_source}
 
-    trainval_pre = TrainValPre(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
+    pixel_num = 500 * config.batch_size // engine.world_size
+    criterion = ProbOhemCrossEntropy2d(ignore_label=config.ignore_label, thresh=0.7, min_kept=pixel_num, use_weight=False) # NUMBER CHANGED TO 5000 from 50000 due to reduction in number of labels since only road labels valid
+     
+
+    model_semi = Network(config.num_classes, criterion=criterion,  # change number of classes to free space only
+                    pretrained_model=config.pretrained_model,
+                    norm_layer=nn.BatchNorm2d)  # need to change norm_layer to nn.BatchNorm2d since BatchNorm2d is derived from the furnace package and doesn't seem to work, it's only needed for syncing batches across multiple GPU, may be needed later
+
+
+    trainval_pre = TrainValPre(config.image_mean, config.image_std)
     test_dataset = CityScape(data_setting, 'trainval', trainval_pre)
 
     test_loader = data.DataLoader(test_dataset,
@@ -220,7 +168,54 @@ with Engine(custom_parser=parser) as engine:
                                   pin_memory=True,
                                   sampler=None)
 
-    device = torch.device("cpu") #Change
+    
+    model_depth = NetworkFullResnet(config.num_classes, criterion=criterion,  # change number of classes to free space only
+                    pretrained_model=config.pretrained_model,
+                    norm_layer=nn.BatchNorm2d,
+                    full_depth_resnet=True,
+                    depth_only=config.depth_only) 
+
+    trainval_pre_all = TrainValPre_All(config.image_mean, config.image_std, config.dimage_mean, config.dimage_std)
+    test_dataset_all = CityScape_All(data_setting, 'trainval', trainval_pre_all)
+
+    test_loader_all = data.DataLoader(test_dataset_all,
+                                  batch_size=1,
+                                  num_workers=config.num_workers,
+                                  drop_last=True,
+                                  shuffle=True,
+                                  pin_memory=True,
+                                  sampler=None)
+    
+    #Loading depth model
+    depth_state_dict = torch.load(config.depth_checkpoint_path) #Change
+    own_state = model_depth.state_dict()
+    print(own_state['branch1.classifier.bias'].data, depth_state_dict['model']['branch1.classifier.bias'].data)
+    for name, param in depth_state_dict['model'].items():
+        #if (name in own_state):#('branch1.head.depth') or name.startswith('branch2.head.last_conv'):
+        param = param.data
+        own_state[name].copy_(param)
+        #    image_layers_loaded.append(name)
+        #else:
+        #    continue
+
+    print('Checkpoint loaded for Depth Model: ', config.depth_checkpoint_path)
+
+    #Loading image model
+
+    print('Loading: ', config.semi_checkpoint_path)
+    semi_state_dict = torch.load(config.semi_checkpoint_path) #Change
+    own_state = model_semi.state_dict()
+    print(own_state['branch1.classifier.bias'].data, semi_state_dict['model']['branch1.classifier.bias'].data)
+    for name, param in semi_state_dict['model'].items():
+        #if (name in own_state):#('branch1.head.depth') or name.startswith('branch2.head.last_conv'):
+        param = param.data
+        own_state[name].copy_(param)
+        #else:
+        #    continue
+
+    print('Checkpoint loaded for Image Model: ', config.semi_checkpoint_path)
+
+    device = torch.device("cuda") #Change
 
     model_depth.to(device)
 
@@ -237,9 +232,9 @@ with Engine(custom_parser=parser) as engine:
     with torch.no_grad():
 
         for batch_test in tqdm(
-                test_loader,
+                test_loader_all,
                 desc=f"Loop: Validation",
-                total=len(test_loader)):
+                total=len(test_loader_all)):
 
             imgs_test = batch_test['data'].to(device)
             gts_test = batch_test['label'].to(device)
@@ -270,10 +265,16 @@ with Engine(custom_parser=parser) as engine:
 
             iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(all_results_depth)
 
+            all_results_depth = []
+
             frame_name = batch_test['fn'][0]
             results_dict_export_depth[frame_name] = [iu[0], iu[1], iu[2], iu[3], iu[4], iu[5], iu[6], iu[7], iu[8], iu[9], iu[10], iu[11], iu[12], iu[13], iu[14], iu[15], iu[16], iu[17], iu[18], mean_IU, mean_pixel_acc, mean_p, mean_r, loss_sup_test]
 
     model_depth.cpu()
+
+    depth = pd.DataFrame.from_dict(results_dict_export_depth, orient='index')
+
+    depth.to_csv(depth_path + 'results.csv')
 
     del model_depth
 
@@ -283,10 +284,12 @@ with Engine(custom_parser=parser) as engine:
 
     all_results_semi = []
 
-    results_dict_export_semi = {'frame': ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
-                'traffic light', 'traffic sign',
-                'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
-                'truck', 'bus', 'train', 'motorcycle', 'bicycle', 'mIoU', 'mean_accuracy', 'mean_p', 'mean_r', 'loss']}
+    results_dict_export_semi = {'frame': 
+            ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
+            'traffic light', 'traffic sign',
+            'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
+            'truck', 'bus', 'train', 'motorcycle', 'bicycle', 'mIoU', 
+            'mean_accuracy', 'mean_p', 'mean_r', 'loss']}
 
     #semi evaluation
     with torch.no_grad():
@@ -325,13 +328,12 @@ with Engine(custom_parser=parser) as engine:
 
             iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(all_results_semi)
 
+            all_results_semi = []
+
             frame_name = batch_test['fn'][0]
             results_dict_export_semi[frame_name] = [iu[0], iu[1], iu[2], iu[3], iu[4], iu[5], iu[6], iu[7], iu[8], iu[9], iu[10], iu[11], iu[12], iu[13], iu[14], iu[15], iu[16], iu[17], iu[18], mean_IU, mean_pixel_acc, mean_p, mean_r, loss_sup_test]
 
     semi = pd.DataFrame.from_dict(results_dict_export_semi, orient='index')
-    depth = pd.DataFrame.from_dict(results_dict_export_depth, orient='index')
 
-    semi.to_excel(semi_path + 'results.xlsx')
-    depth.to_excel(depth_path + 'results.xlsx')
     semi.to_csv(semi_path + 'results.csv')
-    depth.to_csv(depth_path + 'results.csv')
+
