@@ -557,9 +557,6 @@ with Engine(custom_parser=parser) as engine:
                     iu, mean_IU, _, mean_pixel_acc, p, mean_p, r, mean_r, mean_p_no_back, mean_r_no_back = compute_metric(
                         all_results)
                     loss_sup_test = loss_sup_test / len(test_loader)
-                    
-                    concat_image = concat_image.astype(np.uint8)
-                    concat_gt = concat_image.astype(np.uint8)
                         
                     _ = print_pr(p, r,
                               CityScape.get_class_names(), True)
